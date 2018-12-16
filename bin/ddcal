@@ -19,6 +19,7 @@ from scipy.optimize import least_squares
 from ddcal.coordinates import radec_to_lm, lm_to_radec
 import ddcal.skymodel as skymodel
 from ddcal.phaserotate import phase_rotate
+import ddcal.phaserotate as phaserotate
 import ddcal.predict as predict
 import ddcal.residuals as residuals
 
@@ -58,15 +59,6 @@ def main():
     midfreq = np.array([(max(freqs) + min(freqs)) / 2])
     midlambda = 299792458 / midfreq
 
-    # mset.copy('rotated.ms')
-    # mset = table('rotated.ms', readonly=False)
-    # comp = components[1]
-    # uvw, data = phase_rotate(mset, comp.ra, comp.dec)
-    # mset.putcol('UVW', uvw)
-    # mset.putcol('CORRECTED_DATA', data)
-    # mset.close()
-    # exit()
-
     # Calculate antenna positions wrt antenna 0
     times = sorted(set(mset.getcol('TIME')))
     midtime = times[len(times) // 2]
@@ -74,9 +66,9 @@ def main():
     (_U, _V, _), antennas = tmp.getcol('UVW').T, tmp.getcol('ANTENNA2')
 
     # Force U, V indices to align with antenna IDs
-    U = np.zeros_like(antids)
+    U = np.zeros_like(antids, dtype=np.float64)
     U[antennas] = _U
-    V = np.zeros_like(antids)
+    V = np.zeros_like(antids, dtype=np.float64)
     V[antennas] = _V
 
     # Get non-flagged rows
@@ -84,9 +76,12 @@ def main():
     flags = mset.getcol('FLAG')
     ant1 = mset.getcol('ANTENNA1')
     ant2 = mset.getcol('ANTENNA2')
-
-    uvw, data = phase_rotate(mset, ra0, dec0)  # Reset phase direction
+    uvw = mset.getcol('UVW')
+    data = np.complex128(mset.getcol('DATA'))
     data[flags] = np.nan
+
+    metadata = phaserotate.Metadata(mset)
+    uvw, data = phase_rotate(uvw, data, ra0, dec0, metadata)  # Reset phase direction
     u, v, w = uvw.T[:, :, None] / lambdas
 
     # Perform directional calibration
@@ -95,7 +90,7 @@ def main():
     solutions = []
     for comp in components:
         # Phase rotate onto source and average in frequency
-        _, rotated = phase_rotate(mset, comp.ra, comp.dec, uvw=uvw, data=data[:, :, [True, False, False, True]])
+        _, rotated = phase_rotate(uvw, data[:, :, [True, False, False, True]], comp.ra, comp.dec, metadata)
         start = tm.time()
         rotated = freq_average(rotated)[:, None, :]
         elapsed = tm.time() - start
@@ -116,9 +111,7 @@ def main():
         solutions.append(res.x)
         Ax, Ay, x, y = res.x
         logging.debug("Model flux: %g versus fit flux (Ax Ay): %g %g", comp.apparent(midfreq), Ax, Ay)
-
-        # Calculate SNR
-        print(res.cost / len(ant1))
+        logging.debug("Fit params: %g %g %g %g", *res.x)
 
         # Peel
         start = tm.time()
@@ -140,7 +133,7 @@ def main():
         logging.debug("Unpeeled elapsed: %g", tm.time() - start)
 
         # Phase rotate onto source and average in frequency
-        _, rotated = phase_rotate(mset, comp.ra, comp.dec, uvw=uvw, data=data[:, :, [True, False, False, True]])
+        _, rotated = phase_rotate(uvw, data[:, :, [True, False, False, True]], comp.ra, comp.dec, metadata)
         start = tm.time()
         rotated = freq_average(rotated)[:, None, :]
         elapsed = tm.time() - start

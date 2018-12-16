@@ -10,10 +10,8 @@ from numba import njit, float64, complex64, complex128, prange
 import numpy as np
 
 
-def phase_rotate(mset, ra, dec, uvw=None, data=None):
-    # TODO: Cache last mset metadata to speed up multiple calls to phase rotate
-    start = tm.time()
-    dm = measures()
+def phase_rotate(uvw, data, ra, dec, metadata):
+    dm = metadata.dm
     phasecenter = dm.direction(
         'j2000',
         quantity(ra, 'rad'),
@@ -21,39 +19,13 @@ def phase_rotate(mset, ra, dec, uvw=None, data=None):
     )
     dm.do_frame(phasecenter)
 
-    # Find observatory position
-    obsnames = mset.OBSERVATION.getcol('TELESCOPE_NAME')
-    if len(obsnames) == 1:
-        obspos = dm.observatory(obsnames[0])
-        dm.do_frame(obspos)
-    else:
-        raise Exception("Failed to work out the telescope name of this observation")
-
-    # Get antenna positions
-    antennas = mset.ANTENNA.getcol('POSITION')
-    antennas = dm.position(
-        'itrf',
-        quantity(antennas.T[0], 'm'),
-        quantity(antennas.T[1], 'm'),
-        quantity(antennas.T[2], 'm'),
-    )
-
-    # Get lambdas
-    lambdas = 299792458 / mset.SPECTRAL_WINDOW.getcell("CHAN_FREQ", 0)
-
-    if uvw is None:
-        uvw = mset.getcol("UVW")
-    flags = mset.getcol("FLAG")
-    times = mset.getcol("TIME")
-    if data is None:
-        data = complex128(mset.getcol("DATA"))
-    ant1 = mset.getcol("ANTENNA1")
-    ant2 = mset.getcol("ANTENNA2")
-    elapsed = tm.time() - start
-    logging.debug("Phase rotation metadata elapsed: %g", elapsed)
+    times = metadata.times
+    ant1, ant2 = metadata.ant1, metadata.ant2
+    antennas = metadata.antennas
+    lambdas = metadata.lambdas
 
     # Recalculate uvw for new phase position
-    new_uvw = np.zeros_like(uvw)
+    new_uvw = np.empty_like(uvw)
 
     # Process visibilities by time so that we calculate antenna baselines
     # just once
@@ -73,8 +45,6 @@ def phase_rotate(mset, ra, dec, uvw=None, data=None):
 
     # Calculate phase offset
     start = tm.time()
-    #woffset = -2j * np.pi * (new_uvw.T[2] - uvw.T[2])
-    #new_data = data * np.exp(woffset[:, np.newaxis] / lambdas)[:, :, np.newaxis]
     new_data = woffset(data, uvw.T[2], new_uvw.T[2], lambdas)
     elapsed = tm.time() - start
     logging.debug("Phase rotated visibilities elapsed: %g", elapsed)
@@ -92,3 +62,34 @@ def woffset(data, oldw, neww, lambdas):
             phase[row, :, pol] = tmp
 
     return data * np.exp(phase)
+
+
+class Metadata(object):
+    def __init__(self, mset):
+        self.dm = measures()
+
+        # Find observatory position
+        obsnames = mset.OBSERVATION.getcol('TELESCOPE_NAME')
+        if len(obsnames) == 1:
+            obspos = self.dm.observatory(obsnames[0])
+            self.dm.do_frame(obspos)
+        else:
+            raise Exception("Failed to work out the telescope name of this observation")
+
+        # Get antenna positions
+        antennas = mset.ANTENNA.getcol('POSITION')
+        self.antennas = self.dm.position(
+            'itrf',
+            quantity(antennas.T[0], 'm'),
+            quantity(antennas.T[1], 'm'),
+            quantity(antennas.T[2], 'm'),
+        )
+
+        # Get lambdas
+        self.lambdas = 299792458 / mset.SPECTRAL_WINDOW.getcell("CHAN_FREQ", 0)
+
+        # Load times and antenna IDs
+        self.times = mset.getcol("TIME")
+        self.ant1 = mset.getcol("ANTENNA1")
+        self.ant2 = mset.getcol("ANTENNA2")
+

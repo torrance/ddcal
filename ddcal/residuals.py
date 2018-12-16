@@ -1,40 +1,42 @@
 from __future__ import print_function, division
 
-from numba import jit
+from numba import njit, int32, float64, complex128, prange
 import numpy as np
 
 
-def full_firstorder((Ax, Ay, x, y), U, V, ant1, ant2, data, model):
+@njit([float64[:](float64[:], float64[:], float64[:], int32[:], int32[:], complex128[:, :, :], complex128[:, :, :])], parallel=True)
+def full_firstorder(params, U, V, ant1, ant2, data, model):
+    Ax, Ay, x, y = params
+
     phases = x * U + y * V
 
-    model = model.copy()
-    model[:, :, 0] = Ax * model[:, :, 0]
-    model[:, :, 1] = Ay * model[:, :, 1]
+    residuals = np.empty_like(data)
+    for row in prange(0, model.shape[0]):
+        phase = np.exp(1j * (phases[ant1[row]] - phases[ant2[row]]))
+        residuals[row, :, 0] = phase * data[row, :, 0] - Ax * model[row, :, 0]
+        residuals[row, :, 1] = phase * data[row, :, 1] - Ay * model[row, :, 1]
 
-    corrected = data.copy()
-    corrected[:, :, 0] = np.exp(1j * (phases[ant1][:, None] - phases[ant2][:, None])) * data[:, :, 0]
-    corrected[:, :, 1] = np.exp(1j * (phases[ant1][:, None] - phases[ant2][:, None])) * data[:, :, 1]
+    residuals = residuals.flatten()
+    residuals = residuals[~np.isnan(residuals)]
+    residuals = np.concatenate((residuals.real, residuals.imag))
 
-    residual = corrected - model
-    residual = residual[~np.isnan(residual)]
-    residual = np.concatenate([residual.real, residual.imag])
-
-    return residual
+    return residuals
 
 
-def full_secondorder((Ax, Ay, x, y, xx, xy, yy), U, V, ant1, ant2, data, model):
+@njit([float64[:](float64[:], float64[:], float64[:], int32[:], int32[:], complex128[:, :, :], complex128[:, :, :])], parallel=True)
+def full_secondorder(params, U, V, ant1, ant2, data, model):
+    Ax, Ay, x, y, xx, xy, yy = params
+
     phases = x * U + y * V + xx * U**2 + xy * U * V + yy * V**2
 
-    model = model.copy()
-    model[:, :, 0] = Ax * model[:, :, 0]
-    model[:, :, 1] = Ay * model[:, :, 1]
+    residuals = np.empty_like(data)
+    for row in prange(0, model.shape[0]):
+        phase = np.exp(1j * (phases[ant1[row]] - phases[ant2[row]]))
+        residuals[row, :, 0] = phase * data[row, :, 0] - Ax * model[row, :, 0]
+        residuals[row, :, 1] = phase * data[row, :, 1] - Ay * model[row, :, 1]
 
-    corrected = data.copy()
-    corrected[:, :, 0] = np.exp(1j * (phases[ant1][:, None] - phases[ant2][:, None])) * data[:, :, 0]
-    corrected[:, :, 1] = np.exp(1j * (phases[ant1][:, None] - phases[ant2][:, None])) * data[:, :, 1]
+    residuals = residuals.flatten()
+    residuals = residuals[~np.isnan(residuals)]
+    residuals = np.concatenate((residuals.real, residuals.imag))
 
-    residual = corrected - model
-    residual = residual[~np.isnan(residual)]
-    residual = np.concatenate([residual.real, residual.imag])
-
-    return residual
+    return residuals
