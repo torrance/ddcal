@@ -32,7 +32,7 @@ def main():
     parser.add_argument('--center', required=True, help="Coordinate center of the output FITS file (hh:mm:ss dd:mm:ss)")
     parser.add_argument('--radius', type=float, required=True, help="Radius of output FITS file (degrees)")
     parser.add_argument('--scale', type=float, default=0.25, help="Pixel size of output FITS file (degrees)")
-    #parser.add_argument('--intervals', default=1, type=int, help="The number of calibration intervals")
+    parser.add_argument('--intervals', default=1, type=int, help="The number of calibration intervals")
     args = parser.parse_args()
 
     logging.basicConfig(level='DEBUG')
@@ -50,7 +50,6 @@ def main():
     # Todo: process model into apparent fluxes
 
     # Open and process measurement set
-    addImagingColumns(args.ms)
     mset = table(args.ms, readonly=False, ack=False)
     antids = np.array(range(0, len(mset.ANTENNA)))
     ra0, dec0 = mset.FIELD.getcell('PHASE_DIR', 0)[0]
@@ -103,9 +102,10 @@ def main():
         start = tm.time()
         res = least_squares(
             residuals.full_firstorder,
-            (comp.apparent(midfreq), comp.apparent(midfreq), 1e-7, 1e-7),
+            (comp.apparent(midfreq), comp.apparent(midfreq), 0, 0),
             args=(U, V, ant1, ant2, rotated, model),
-            bounds=([0, 0, -1e-2, -1e-2], [999, 999, 1e-2, 1e-2]),
+            verbose=2,
+            x_scale=[1e-2, 1e-2, 1e-6, 1e-6],
         )
         logging.debug("First order fit elapsed: %g", tm.time() - start)
         solutions.append(res.x)
@@ -145,12 +145,16 @@ def main():
         res = least_squares(
             residuals.full_secondorder,
             (Ax, Ay, x, y, 0, 0, 0),
-            args=(U, V, ant1, ant2, rotated, model)
+            args=(U, V, ant1, ant2, rotated, model),
+            verbose=2,
+            x_scale=[1e-2, 1e-2, 1e-6, 1e-6, 1e-10, 1e-10, 1e-10],
         )
         logging.debug("Second order fit elapsed: %g", tm.time() - start)
         solutions[i] = res.x
         Ax, Ay, x, y, xx, xy, yy = res.x
         logging.debug("Model flux: %g versus fit flux (Ax Ay): %g %g", comp.apparent(midfreq), Ax, Ay)
+        logging.debug("Fit params: %g %g %g %g %g %g %g", *res.x)
+        logging.debug(res.message)
 
         # Peel
         start = tm.time()
@@ -159,8 +163,6 @@ def main():
         l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
         peel(data, u, v, w, l, m, Ax, Ay, phases)
         logging.debug("Peeled second order elapsed: %g", tm.time() - start)
-
-    mset.putcol('CORRECTED_DATA', data)
 
     # Create lists of lm coordinates in the FITS projection for calibration directions
     ras = np.array([comp.ra for comp in components])
