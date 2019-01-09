@@ -183,6 +183,14 @@ def main():
         yy[None, :] * V[:, None]**2
     )  # [antennas, directions]
 
+    gaintable = table('ddcal.gcal', readonly=False)
+    gains = gaintable.getcol('CPARAM')
+    gains[:, :, :] = np.exp(-1j * phases[:, 0])[:, None, None]
+    gaintable.putcol('CPARAM', gains)
+    flags = gaintable.getcol('FLAG')
+    flags[:, :] = False
+    gaintable.putcol('FLAG', flags)
+
     # Provision TEC fits file and set up headers
     width, height = int((2 * args.radius) // args.scale), int((2 * args.radius) // args.scale)
     center_x, center_y = int(width // 2), int(height // 2)
