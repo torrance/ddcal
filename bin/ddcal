@@ -107,9 +107,10 @@ def main():
             (comp.apparent(midfreq), comp.apparent(midfreq), 0, 0),
             args=(U, V, ant1, ant2, rotated, model),
             verbose=2,
-            x_scale=[1e-2, 1e-2, 1e-6, 1e-6],
+            x_scale=[1e-2, 1e-2, 1e-5, 1e-5],
         )
         logging.debug("First order fit elapsed: %g", tm.time() - start)
+        logging.debug(res.message)
         solutions.append(res.x)
         Ax, Ay, x, y = res.x
         logging.debug("Model flux: %g versus fit flux (Ax Ay): %g %g", comp.apparent(midfreq), Ax, Ay)
@@ -149,9 +150,10 @@ def main():
             (Ax, Ay, x, y, 0, 0, 0),
             args=(U, V, ant1, ant2, rotated, model),
             verbose=2,
-            x_scale=[1e-2, 1e-2, 1e-6, 1e-6, 1e-10, 1e-10, 1e-10],
+            x_scale=[1e-2, 1e-2, 1e-5, 1e-5, 1e-9, 1e-9, 1e-9],
         )
         logging.debug("Second order fit elapsed: %g", tm.time() - start)
+        logging.debug(res.message)
         solutions[i] = res.x
         Ax, Ay, x, y, xx, xy, yy = res.x
         logging.debug("Model flux: %g versus fit flux (Ax Ay): %g %g", comp.apparent(midfreq), Ax, Ay)
