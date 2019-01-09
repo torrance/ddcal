@@ -33,6 +33,7 @@ def main():
     parser.add_argument('--radius', type=float, required=True, help="Radius of output FITS file (degrees)")
     parser.add_argument('--scale', type=float, default=0.25, help="Pixel size of output FITS file (degrees)")
     parser.add_argument('--intervals', default=1, type=int, help="The number of calibration intervals")
+    parser.add_argument('--refant', default=0, type=int)
     args = parser.parse_args()
 
     logging.basicConfig(level='DEBUG')
@@ -61,7 +62,8 @@ def main():
     # Calculate antenna positions wrt antenna 0
     times = sorted(set(mset.getcol('TIME')))
     midtime = times[len(times) // 2]
-    tmp = taql("select UVW, ANTENNA2 from $mset where TIME = $midtime and ANTENNA1 = 0")
+    refant = args.refant
+    tmp = taql("select UVW, ANTENNA2 from $mset where TIME = $midtime and ANTENNA1 = $refant")
     (_U, _V, _), antennas = tmp.getcol('UVW').T, tmp.getcol('ANTENNA2')
 
     # Force U, V indices to align with antenna IDs
