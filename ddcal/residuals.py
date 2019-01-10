@@ -17,7 +17,7 @@ def full_firstorder(params, U, V, ant1, ant2, data, model):
         residuals[row, :, 1] = phase * data[row, :, 1] - Ay * model[row, :, 1]
 
     residuals = residuals.flatten()
-    residuals = residuals[~np.isnan(residuals)]
+    residuals = residuals[np.isfinite(residuals)]
     residuals = np.concatenate((residuals.real, residuals.imag))
 
     return residuals
@@ -36,7 +36,7 @@ def full_secondorder(params, U, V, ant1, ant2, data, model):
         residuals[row, :, 1] = phase * data[row, :, 1] - Ay * model[row, :, 1]
 
     residuals = residuals.flatten()
-    residuals = residuals[~np.isnan(residuals)]
+    residuals = residuals[np.isfinite(residuals)]
     residuals = np.concatenate((residuals.real, residuals.imag))
 
     return residuals
