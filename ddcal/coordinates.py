@@ -1,5 +1,7 @@
 from __future__ import print_function, division
 
+from astropy.coordinates import AltAz, SkyCoord
+import astropy.units as u
 import numpy as np
 
 
@@ -27,3 +29,9 @@ def lm_to_radec(l, m, ra0, dec0):
     dec = np.arcsin(m * cosDec0 + n * sinDec0)
     return np.array([ra, dec])
 
+
+def radec_to_altaz(ra, dec, time, pos):
+    coord = SkyCoord(ra, dec, unit=(u.radian, u.radian))
+    coord.time = time + pos.lon.hourangle
+    coord = coord.transform_to(AltAz(obstime=time, location=pos))
+    return coord.alt.rad, coord.az.rad

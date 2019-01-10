@@ -17,6 +17,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.optimize import least_squares
 
 from ddcal.coordinates import radec_to_lm, lm_to_radec
+from ddcal.mwabeam import MWABeam
 import ddcal.skymodel as skymodel
 from ddcal.phaserotate import phase_rotate
 import ddcal.phaserotate as phaserotate
@@ -36,6 +37,8 @@ def main():
     parser.add_argument('--refant', default=0, type=int)
     parser.add_argument('--oversample', default=3, type=int)
     parser.add_argument('--smoothing-kernel', default=1, type=float, help="The gaussian smoothing kernal width (sigma) in units of --scale")
+    parser.add_argument('--flux-threshold', default=1, type=float, help="Sources with apparent flux values (Jy) under this threshold will not be fit with 2nd order terms")
+    parser.add_argument('--metafits', required=True, help="Path to the metafits file")
     args = parser.parse_args()
 
     logging.basicConfig(level='DEBUG')
@@ -60,6 +63,16 @@ def main():
     lambdas = 299792458 / freqs
     midfreq = np.array([(max(freqs) + min(freqs)) / 2])
     midlambda = 299792458 / midfreq
+
+    logger.info("Calculating apparent flux of model sources...")
+    # Set beam for each component so that we can later calculate apparent flux
+    beam = MWABeam(args.metafits)
+    for comp in components:
+        comp.beam = beam
+
+    # Calculate apparent flux and reorder components from brightest to dimmest
+    components = sorted(components, reverse=True, key=lambda x: sum(x.apparent(midfreq)))
+    logger.info("Model sources ordered by apparent flux")
 
     # Calculate antenna positions wrt antenna 0
     times = sorted(set(mset.getcol('TIME')))

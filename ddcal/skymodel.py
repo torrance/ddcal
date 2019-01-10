@@ -99,6 +99,7 @@ class Component(object):
     def __init__(self, position, measurements):
         self.position = position
         self.measurements = measurements
+        self.apparent_cache = {}
 
         logfreq = np.log(self.measurements.T[0])
         logflux = np.log(self.measurements.T[1])
@@ -113,6 +114,10 @@ class Component(object):
         return self.position.dec.rad
 
     def flux(self, frequency):
+        """
+        Returns stokes I flux value for given frequency
+        """
+        frequency = np.asscalar(np.array(frequency))
         logfreq = np.log(frequency)
         logflux = 0
 
@@ -122,8 +127,26 @@ class Component(object):
         return np.exp(logflux)
 
     def apparent(self, frequency):
-        # TODO
-        return self.flux(frequency)
+        """
+        Returns XX, YY flux values for a given frequency
+        """
+        frequency = np.asscalar(np.array(frequency))
+
+        try:
+            return self.apparent_cache[frequency]
+        except KeyError:
+            jones = self.beam.jones(self.ra, self.dec, frequency)[0]
+            flux = self.flux(frequency)
+
+            # apparent = jones x linear x jones^H (where H is the Hermitian transponse)
+            # We are assuming XY and YX are neglible, ie.:
+            # apparentXX = J0 * J0* * XX + J1 * J1* * YY
+            # apparentYY = J2 * J2* * XX + J3 * J3* * YY
+            apparent_xx = abs(jones[0, 0])**2 * flux + abs(jones[0, 1])**2 * flux
+            apparent_yy = abs(jones[1, 0])**2 * flux + abs(jones[1, 1])**2 * flux
+
+            self.apparent_cache[frequency] = (apparent_xx, apparent_yy)
+            return (apparent_xx, apparent_yy)
 
 
 class SkyModelParseError(Exception):
