@@ -34,6 +34,8 @@ def main():
     parser.add_argument('--scale', type=float, default=0.25, help="Pixel size of output FITS file (degrees)")
     parser.add_argument('--intervals', default=1, type=int, help="The number of calibration intervals")
     parser.add_argument('--refant', default=0, type=int)
+    parser.add_argument('--oversample', default=3, type=int)
+    parser.add_argument('--smoothing-kernel', default=1, type=float, help="The gaussian smoothing kernal width (sigma) in units of --scale")
     args = parser.parse_args()
 
     logging.basicConfig(level='DEBUG')
@@ -230,22 +232,22 @@ def main():
     wcs = WCS(Atec.header)
 
     # Get oversampled l,m values for TEC file
-    xx, yy = np.meshgrid(range(0, 3 * width), range(0, 3 * height))
+    xx, yy = np.meshgrid(range(0, args.oversample * width), range(0, args.oversample * height))
     pixels = np.array([xx.flatten(), yy.flatten()]).T
 
-    ret = wcs.all_pix2world([[x / 3 - 1/3, y / 3 - 1/3, 0, 0, 0] for x, y in pixels], 0)
+    ret = wcs.all_pix2world([[x / args.oversample - 1/args.oversample, y / args.oversample - 1/args.oversample, 0, 0, 0] for x, y in pixels], 0)
     grid_lm = radec_to_lm(np.radians(ret.T[0]), np.radians(ret.T[1]), center.ra.rad, center.dec.rad)
 
     for i in antids:
         # Compute interpolated phases
         phases_grid = griddata(directions_lm.T, phases[i], grid_lm.T, method='nearest')
-        phases_grid = np.reshape(phases_grid, (3*height, 3*width))  # [ dec, ra ]
+        phases_grid = np.reshape(phases_grid, (args.oversample * height, args.oversample * width))  # [ dec, ra ]
 
         # Gaussian smooth
-        phases_grid = gaussian_filter(phases_grid, 3, mode='constant', cval=0)
+        phases_grid = gaussian_filter(phases_grid, args.oversample * args.smoothing_kernel, mode='constant', cval=0)
 
         # Downsample
-        phases_grid = phases_grid[1::3, 1::3]
+        phases_grid = phases_grid[1::args.oversample, 1::args.oversample]
 
         data[0, 0, i] = phases_grid / 8.44797245E9 * midfreq
 
