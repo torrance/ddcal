@@ -287,6 +287,17 @@ def freq_average(data):
 
     return averaged
 
+
+def interpolate(xs, ys, zs, points, power=1):
+    dists = np.sqrt((points[:, 0, None] - xs[None, :])**2 + (points[:, 1, None] - ys[None, :])**2)  # [point, xyz]
+
+    weights = 1 / dists**power
+    weights = weights / weights.sum(axis=1)[:, None]  # Normalisation
+
+    vals = (weights * zs[None, :]).sum(axis=1)
+    return vals
+
+
 if __name__ == '__main__':
     main()
 
