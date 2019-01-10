@@ -10,6 +10,10 @@ from numba import njit, float64, complex64, complex128, prange
 import numpy as np
 
 
+logger = logging.getLogger(__name__)
+logger.setLevel('DEBUG')
+
+
 def phase_rotate(uvw, data, ra, dec, metadata):
     dm = metadata.dm
     phasecenter = dm.direction(
@@ -41,13 +45,13 @@ def phase_rotate(uvw, data, ra, dec, metadata):
         idx = times == time
         new_uvw[idx] = antenna_uvw[ant1[idx]] - antenna_uvw[ant2[idx]]
     elapsed = tm.time() - start
-    logging.debug("Phase rotated uvw elapsed: %g", elapsed)
+    logger.debug("Phase rotated uvw elapsed: %g", elapsed)
 
     # Calculate phase offset
     start = tm.time()
     new_data = woffset(data, uvw.T[2], new_uvw.T[2], lambdas)
     elapsed = tm.time() - start
-    logging.debug("Phase rotated visibilities elapsed: %g", elapsed)
+    logger.debug("Phase rotated visibilities elapsed: %g", elapsed)
 
     return new_uvw, new_data
 
