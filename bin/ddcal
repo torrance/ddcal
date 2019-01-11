@@ -115,6 +115,10 @@ def main():
         model = np.ones_like(rotated)
 
         # Fit
+        logger.debug(
+            "Fitting source located at %s...",
+            comp.position.to_string('hmsdms'),
+        )
         start = tm.time()
         res = least_squares(
             residuals.full_firstorder,
@@ -127,7 +131,14 @@ def main():
         logger.debug(res.message)
         solutions.append(res.x)
         Ax, Ay, x, y = res.x
-        logger.debug("Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g", comp.flux(midfreq), comp.apparent(midfreq)[0], comp.apparent(midfreq)[1], Ax, Ay)
+        logger.debug(
+            "Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g",
+            comp.flux(midfreq),
+            comp.apparent(midfreq)[0],
+            comp.apparent(midfreq)[1],
+            Ax,
+            Ay,
+        )
         logger.debug("Fit params: %g %g %g %g", *res.x)
         if abs(Ax / comp.apparent(midfreq)[0] - 1) > 0.5 or abs(Ay / comp.apparent(midfreq)[1] - 1) > 0.5:
             logger.warning("Flux discrepency!")
@@ -165,6 +176,10 @@ def main():
 
         model = np.ones_like(rotated)
 
+        logger.debug(
+            "Fitting source located at %s...",
+            comp.position.to_string('hmsdms'),
+        )
         start = tm.time()
         res = least_squares(
             residuals.full_secondorder,
@@ -177,7 +192,14 @@ def main():
         logger.debug(res.message)
         solutions[i] = res.x
         Ax, Ay, x, y, xx, xy, yy = res.x
-        logger.debug("Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g", comp.flux(midfreq), comp.apparent(midfreq)[0], comp.apparent(midfreq)[1], Ax, Ay)
+        logger.debug(
+            "Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g",
+            comp.flux(midfreq),
+            comp.apparent(midfreq)[0],
+            comp.apparent(midfreq)[1],
+            Ax,
+            Ay,
+        )
         logger.debug("Fit params: %g %g %g %g %g %g %g", *res.x)
         logger.debug(res.message)
 
