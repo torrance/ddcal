@@ -129,17 +129,25 @@ def main():
         )
         logger.debug("First order fit elapsed: %g", tm.time() - start)
         logger.debug(res.message)
-        solutions.append(res.x)
-        Ax, Ay, x, y = res.x
         logger.debug(
             "Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g",
             comp.flux(midfreq),
             comp.apparent(midfreq)[0],
             comp.apparent(midfreq)[1],
-            Ax,
-            Ay,
+            res.x[0],
+            res.x[1],
         )
         logger.debug("Fit params: %g %g %g %g", *res.x)
+
+        # If fit converged, add solution or else remove this source from model list
+        if res.success:
+            Ax, Ay, x, y = res.x
+            solutions.append([comp, Ax, Ay, x, y])
+        else:
+            logger.warning("Fit failed; removing source from model list")
+            continue
+
+        # Check for discrepencies between model flux and fitted flux
         if abs(Ax / comp.apparent(midfreq)[0] - 1) > 0.5 or abs(Ay / comp.apparent(midfreq)[1] - 1) > 0.5:
             logger.warning("Flux discrepency!")
 
@@ -153,10 +161,10 @@ def main():
 
     # Second pass
     logger.info("Beginning pass 2")
-    for i, (comp, (Ax, Ay, x, y)) in enumerate(zip(components, solutions)):
+    for i, (comp, Ax, Ay, x, y) in enumerate(solutions):
         # Skip 2nd order fitting for faint sources
         if Ax < args.flux_threshold and Ay < args.flux_threshold:
-            solutions[i] = (Ax, Ay, x, y, 0, 0, 0)
+            solutions[i] = [Ax, Ay, x, y, 0, 0, 0]
             continue
 
         # Unpeel
@@ -190,18 +198,24 @@ def main():
         )
         logger.debug("Second order fit elapsed: %g", tm.time() - start)
         logger.debug(res.message)
-        solutions[i] = res.x
-        Ax, Ay, x, y, xx, xy, yy = res.x
         logger.debug(
             "Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g",
             comp.flux(midfreq),
             comp.apparent(midfreq)[0],
             comp.apparent(midfreq)[1],
-            Ax,
-            Ay,
+            res.x[0],
+            res.x[1],
         )
         logger.debug("Fit params: %g %g %g %g %g %g %g", *res.x)
-        logger.debug(res.message)
+
+        # If fit converged, add solution or else reset solution to first order
+        if res.success:
+            Ax, Ay, x, y, xx, xy, yy = res.x
+            solutions[i] = [Ax, Ay, x, y, xx, xy, yy]
+        else:
+            logger.warning("Fit failed; resetting to 1st order solution")
+            Ax, Ay, x, y, xx, xy, yy = Ax, Ay, x, y, 0, 0, 0
+            solutions[i] = [Ax, Ay, x, y, xx, xy, yy]
 
         # Peel
         start = tm.time()
