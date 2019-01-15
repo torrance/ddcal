@@ -16,17 +16,17 @@ from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import least_squares
 
-from ddcal.coordinates import radec_to_lm, lm_to_radec
-from ddcal.mwabeam import MWABeam
-import ddcal.skymodel as skymodel
-from ddcal.phaserotate import phase_rotate
-import ddcal.phaserotate as phaserotate
-import ddcal.predict as predict
-import ddcal.residuals as residuals
+from radical.coordinates import radec_to_lm, lm_to_radec
+from radical.mwabeam import MWABeam
+import radical.skymodel as skymodel
+from radical.phaserotate import phase_rotate
+import radical.phaserotate as phaserotate
+import radical.predict as predict
+import radical.residuals as residuals
 
 
 def main():
-    parser = ArgumentParser()
+    parser = ArgumentParser("radical", description="radical: Radio Astronomy Directional Ionospheric CALibration")
     parser.add_argument('--ms', required=True, help="The measurement set to calibrate")
     parser.add_argument('--model', required=True, help="The sky model (skymodel fileformat 1.1)")
     parser.add_argument('--output', default='tec.fits', help="The output FITS file contains the phase corrections")
@@ -247,6 +247,12 @@ def main():
     flags = gaintable.getcol('FLAG')
     flags[:, :] = False
     gaintable.putcol('FLAG', flags)
+    exit()
+
+    np.save('directions_lm.npy', directions_lm)
+    np.save('phases.npy', phases)
+    directions_lm = np.load('directions_lm.npy')
+    phases = np.load('phases.npy')
 
     # Provision TEC fits file and set up headers
     width, height = int((2 * args.radius) // args.scale), int((2 * args.radius) // args.scale)

@@ -6,7 +6,7 @@ import mwa_pb.config
 import mwa_pb.primary_beam as pb
 import numpy as np
 
-from ddcal.coordinates import radec_to_altaz
+from radical.coordinates import radec_to_altaz
 
 
 class MWABeam(object):

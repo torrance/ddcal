@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="ddcal",
+    name="radical",
     version="0.0.1",
     author="Torrance Hodgson",
     author_email="torrance.hodgson@postgrad.curtin.edu.au",
-    description="A directional calibration tool for radio astronomy measurement sets",
+    description="Radio Astronomy Directional Ionospheric Calibration: directional calibration for the Murchison Widefield Array",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/torrance/ddcal",
+    url="https://github.com/torrance/radical",
     packages=setuptools.find_packages(),
-    scripts=['bin/ddcal'],
+    scripts=['bin/radical'],
 )

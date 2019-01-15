@@ -2,7 +2,7 @@ from __future__ import print_function, division
 
 import numpy as np
 
-from .coordinates import radec_to_lm
+from radical.coordinates import radec_to_lm
 
 
 def source(comp, ra0, dec0, u, v, w, freqs):
