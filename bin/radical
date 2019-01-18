@@ -19,6 +19,7 @@ from scipy.optimize import least_squares
 from radical.coordinates import radec_to_lm, lm_to_radec
 from radical.mwabeam import MWABeam
 import radical.skymodel as skymodel
+from radical.peel import peel, unpeel
 from radical.phaserotate import phase_rotate
 import radical.phaserotate as phaserotate
 import radical.predict as predict
@@ -313,30 +314,6 @@ def main():
         data[0, 0, i] = phases_grid / 8.44797245E9 * midfreq
 
     Atec.writeto(args.output, overwrite=True)
-
-
-@njit([(complex128[:, :, :], float64[:, :], float64[:, :], float64[:, :], float64, float64, float64, float64, float64[:])], parallel=True)
-def peel(data, u, v, w, l, m, Ax, Ay, phases):
-    n = np.sqrt(1 - l**2 - m**2) - 1
-
-    for row in prange(0, u.shape[0]):
-        phase = 2j * np.pi * (u[row]*l + v[row]*m + w[row]*n)
-        phase = np.exp(phase - 1j * phases[row])
-
-        data[row, :, 0] -= Ax * phase
-        data[row, :, 3] -= Ay * phase
-
-
-@njit([(complex128[:, :, :], float64[:, :], float64[:, :], float64[:, :], float64, float64, float64, float64, float64[:])], parallel=True)
-def unpeel(data, u, v, w, l, m, Ax, Ay, phases):
-    n = np.sqrt(1 - l**2 - m**2) - 1
-
-    for row in prange(0, u.shape[0]):
-        phase = 2j * np.pi * (u[row]*l + v[row]*m + w[row]*n)
-        phase = np.exp(phase - 1j * phases[row])
-
-        data[row, :, 0] += Ax * phase
-        data[row, :, 3] += Ay * phase
 
 
 @njit([complex128[:, :](complex128[:, :, :])], parallel=True)
