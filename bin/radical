@@ -15,6 +15,7 @@ from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
 
 import radical.calibrate as calibrate
+import radical.constants as constants
 from radical.coordinates import radec_to_lm, lm_to_radec
 from radical.mwabeam import MWABeam
 import radical.skymodel as skymodel
@@ -58,9 +59,9 @@ def main():
     antids = np.array(range(0, len(mset.ANTENNA)))
     ra0, dec0 = mset.FIELD.getcell('PHASE_DIR', 0)[0]
     freqs = mset.SPECTRAL_WINDOW.getcell('CHAN_FREQ', 0)
-    lambdas = 299792458 / freqs
+    lambdas = constants.c / freqs
     midfreq = np.array([(max(freqs) + min(freqs)) / 2])
-    midlambda = 299792458 / midfreq
+    midlambda = constants.c / midfreq
 
     logger.info("Calculating apparent flux of model sources...")
     # Set beam for each component so that we can later calculate apparent flux

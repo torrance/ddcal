@@ -9,6 +9,8 @@ from casacore.tables import taql
 from numba import njit, float64, complex64, complex128, prange
 import numpy as np
 
+import radical.constants as constants
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
@@ -90,7 +92,7 @@ class Metadata(object):
         )
 
         # Get lambdas
-        self.lambdas = 299792458 / mset.SPECTRAL_WINDOW.getcell("CHAN_FREQ", 0)
+        self.lambdas = constants.c / mset.SPECTRAL_WINDOW.getcell("CHAN_FREQ", 0)
 
         # Load times and antenna IDs
         self.times = mset.getcol("TIME")
