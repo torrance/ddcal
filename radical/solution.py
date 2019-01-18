@@ -5,7 +5,7 @@ class Solution(object):
     _x_scale=[1e-2, 1e-2, 1e-5, 1e-5, 1e-9, 1e-9, 1e-9]
 
     def __init__(self):
-        self.params = [0] * 7
+        self.params = [1, 1] + [0] * 5
         self.failed = False
 
     @property
