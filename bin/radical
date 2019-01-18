@@ -24,6 +24,7 @@ from radical.phaserotate import phase_rotate
 import radical.phaserotate as phaserotate
 import radical.predict as predict
 import radical.residuals as residuals
+from radical.solution import Solution
 
 
 def main():
@@ -100,146 +101,107 @@ def main():
     uvw, data = phase_rotate(uvw, data, ra0, dec0, metadata)  # Reset phase direction
     u, v, w = uvw.T[:, :, None] / lambdas
 
-    # Perform directional calibration
-    # First pass
-    logger.info("Beginning pass 1")
+    # Create empty solutions and populate Ax, Ay
     solutions = []
     for comp in components:
-        # Phase rotate onto source and average in frequency
-        _, rotated = phase_rotate(uvw, data[:, :, [True, False, False, True]], comp.ra, comp.dec, metadata)
-        start = tm.time()
-        rotated = freq_average(rotated)[:, None, :]
-        elapsed = tm.time() - start
-        logger.debug("Frequency averaging elapsed: %g", elapsed)
+        solution = Solution()
+        solution.set_params(comp.apparent(midfreq))
+        solutions.append(solution)
 
-        # Create model
-        model = np.ones_like(rotated)
+    # Begin directional calibration
+    for order in [1, 2]:
+        logging.info("Beginning pass %d", order)
 
-        # Fit
-        logger.debug(
-            "Fitting source located at %s...",
-            comp.position.to_string('hmsdms'),
-        )
-        start = tm.time()
-        res = least_squares(
-            residuals.full_firstorder,
-            (comp.apparent(midfreq)[0], comp.apparent(midfreq)[1], 0, 0),
-            args=(U, V, ant1, ant2, rotated, model),
-            verbose=2,
-            x_scale=[1e-2, 1e-2, 1e-5, 1e-5],
-        )
-        logger.debug("First order fit elapsed: %g", tm.time() - start)
-        logger.debug(res.message)
-        logger.debug(
-            "Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g",
-            comp.flux(midfreq),
-            comp.apparent(midfreq)[0],
-            comp.apparent(midfreq)[1],
-            res.x[0],
-            res.x[1],
-        )
-        logger.debug("Fit params: %g %g %g %g", *res.x)
+        for comp, solution in zip(components, solutions):
+            # Don't try higher order fits if we've previously failed to fit
+            if solution.failed:
+                continue
 
-        # If fit converged, add solution or else remove this source from model list
-        if res.success:
-            Ax, Ay, x, y = res.x
-            solutions.append([comp, Ax, Ay, x, y])
-        else:
-            logger.warning("Fit failed; removing source from model list")
-            continue
+            # For second and higher order fits, we need to check for threshold limits
+            # and and unpeel previously peeled sources
+            if order > 1:
+                # Skip 2nd order fitting for faint sources
+                if solution.Ax < args.flux_threshold and solution.Ay < args.flux_threshold:
+                    continue
 
-        # Check for discrepencies between model flux and fitted flux
-        if abs(Ax / comp.apparent(midfreq)[0] - 1) > 0.5 or abs(Ay / comp.apparent(midfreq)[1] - 1) > 0.5:
-            logger.warning("Flux discrepency!")
+                # Unpeel
+                start = tm.time()
+                phases = solution.phases(U, V)
+                phases = phases[ant1] - phases[ant2]
+                l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
+                unpeel(data, u, v, w, l, m, solution.Ax, solution.Ay, phases)
+                logger.debug("Unpeeled elapsed: %g", tm.time() - start)
 
-        # Peel
-        start = tm.time()
-        phases = x * U + y * V
-        phases = phases[ant1] - phases[ant2]
-        l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
-        peel(data, u, v, w, l, m, Ax, Ay, phases)
-        logger.debug("Peeled first order elapsed: %g", tm.time() - start)
+            # Phase rotate onto source and average in frequency
+            _, rotated = phase_rotate(uvw, data[:, :, [True, False, False, True]], comp.ra, comp.dec, metadata)
+            start = tm.time()
+            rotated = freq_average(rotated)[:, None, :]
+            elapsed = tm.time() - start
+            logger.debug("Frequency averaging elapsed: %g", elapsed)
 
-    # Second pass
-    logger.info("Beginning pass 2")
-    for i, (comp, Ax, Ay, x, y) in enumerate(solutions):
-        # Skip 2nd order fitting for faint sources
-        if Ax < args.flux_threshold and Ay < args.flux_threshold:
-            solutions[i] = [Ax, Ay, x, y, 0, 0, 0]
-            continue
+            # Create model
+            model = np.ones_like(rotated)
 
-        # Unpeel
-        start = tm.time()
-        phases = x * U + y * V
-        phases = phases[ant1] - phases[ant2]
-        l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
-        unpeel(data, u, v, w, l, m, Ax, Ay, phases)
-        logger.debug("Unpeeled elapsed: %g", tm.time() - start)
+            # Fit
+            logger.debug(
+                "Fitting source located at %s...",
+                comp.position.to_string('hmsdms'),
+            )
+            if order == 1:
+                f = residuals.full_firstorder
+            elif order == 2:
+                f = residuals.full_secondorder
 
-        # Phase rotate onto source and average in frequency
-        _, rotated = phase_rotate(uvw, data[:, :, [True, False, False, True]], comp.ra, comp.dec, metadata)
-        start = tm.time()
-        rotated = freq_average(rotated)[:, None, :]
-        elapsed = tm.time() - start
-        logger.debug("Frequency averaging elapsed: %g", elapsed)
+            start = tm.time()
+            res = least_squares(
+                f,
+                x0=solution.get_params(order=order),
+                args=(U, V, ant1, ant2, rotated, model),
+                verbose=2,
+                x_scale=solution.x_scale(order=order),
+            )
+            logger.debug("Fit (order=%d) elapsed: %g", order, tm.time() - start)
+            logger.debug(res.message)
+            logger.debug(
+                "Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g",
+                comp.flux(midfreq),
+                comp.apparent(midfreq)[0],
+                comp.apparent(midfreq)[1],
+                res.x[0],
+                res.x[1],
+            )
+            logger.debug("Fit params:" + " %g" * len(res.x), *res.x)
 
-        model = np.ones_like(rotated)
+            # If fit converged, add solution or else remove this source from model list
+            if res.success:
+                solution.set_params(res.x)
+            else:
+                logger.warning("Fit failed; marking solution as failed")
+                solution.failed = True
+                continue
 
-        logger.debug(
-            "Fitting source located at %s...",
-            comp.position.to_string('hmsdms'),
-        )
-        start = tm.time()
-        res = least_squares(
-            residuals.full_secondorder,
-            (Ax, Ay, x, y, 0, 0, 0),
-            args=(U, V, ant1, ant2, rotated, model),
-            verbose=2,
-            x_scale=[1e-2, 1e-2, 1e-5, 1e-5, 1e-9, 1e-9, 1e-9],
-        )
-        logger.debug("Second order fit elapsed: %g", tm.time() - start)
-        logger.debug(res.message)
-        logger.debug(
-            "Model flux: (%g, %g, %g) versus fit flux (Ax Ay): %g %g",
-            comp.flux(midfreq),
-            comp.apparent(midfreq)[0],
-            comp.apparent(midfreq)[1],
-            res.x[0],
-            res.x[1],
-        )
-        logger.debug("Fit params: %g %g %g %g %g %g %g", *res.x)
+            # Check for discrepencies between model flux and fitted flux
+            if abs(solution.Ax / comp.apparent(midfreq)[0] - 1) > 0.5 or abs(solution.Ay / comp.apparent(midfreq)[1] - 1) > 0.5:
+                logger.warning("Flux discrepency!")
 
-        # If fit converged, add solution or else reset solution to first order
-        if res.success:
-            Ax, Ay, x, y, xx, xy, yy = res.x
-            solutions[i] = [Ax, Ay, x, y, xx, xy, yy]
-        else:
-            logger.warning("Fit failed; resetting to 1st order solution")
-            Ax, Ay, x, y, xx, xy, yy = Ax, Ay, x, y, 0, 0, 0
-            solutions[i] = [Ax, Ay, x, y, xx, xy, yy]
-
-        # Peel
-        start = tm.time()
-        phases = x * U + y * V + xx * U**2 + xy * U * V + yy * V**2
-        phases = phases[ant1] - phases[ant2]
-        l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
-        peel(data, u, v, w, l, m, Ax, Ay, phases)
-        logger.debug("Peeled second order elapsed: %g", tm.time() - start)
+            # Peel the source
+            start = tm.time()
+            phases = solution.phases(U, V)
+            phases = phases[ant1] - phases[ant2]
+            l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
+            peel(data, u, v, w, l, m, solution.Ax, solution.Ay, phases)
+            logger.debug("Peeled elapsed: %g", tm.time() - start)
 
     # Create lists of lm coordinates in the FITS projection for calibration directions
-    ras = np.array([comp.ra for comp in components])
-    decs = np.array([comp.dec for comp in components])
+    ras = np.array([comp.ra for i, comp in enumerate(components) if not solutions[i].failed])
+    decs = np.array([comp.dec for i, comp in enumerate(components) if not solutions[i].failed])
     directions_lm = radec_to_lm(ras, decs, center.ra.rad, center.dec.rad)
 
     # Solve phases for each antenna for each calibration direction
-    _, _, x, y, xx, xy, yy = np.array(solutions).T
-    phases = (
-        x[None, :] * U[:, None] +
-        y[None, :] * V[:, None] +
-        xx[None, :] * U[:, None]**2 +
-        xy[None, :] * U[:, None] * V[:, None] +
-        yy[None, :] * V[:, None]**2
-    )  # [antennas, directions]
+    phases = np.empty((len(antids), len(directions_lm)))
+    for i, solution in enumerate(solutions):
+        if not solution.failed:
+            phases[:, i] = solution.phases(U, V)
 
     gaintable = table('ddcal.gcal', readonly=False)
     gains = gaintable.getcol('CPARAM')
