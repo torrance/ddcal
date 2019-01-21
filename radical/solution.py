@@ -2,7 +2,7 @@ from __future__ import print_function, division
 
 
 class Solution(object):
-    _x_scale=[1e-2, 1e-2, 1e-5, 1e-5, 1e-9, 1e-9, 1e-9]
+    _x_scale=[1e-2, 1e-2, 1e-6, 1e-6, 1e-9, 1e-9, 1e-9]
 
     def __init__(self):
         self.params = [1, 1] + [0] * 5
