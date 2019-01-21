@@ -16,17 +16,17 @@ import radical.peel
     ]
 )
 def test_peel_with_zero_phases(mockms, Ax, Ay, l, m):
-    u, v, w = mockms.UVW.T[:, :, None] / mockms.CHAN_FREQ
-    phases = np.zeros(u.shape[0])
+    u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
+    phases = np.zeros(len(u))
 
-    data = np.array([Ax, 0, 0, Ay]) * np.exp(
+    mockms.data = np.array([Ax, 0, 0, Ay]) * np.exp(
         2j * np.pi * (u * l + v * m + w * (np.sqrt(1 - l**2 - m**2) - 1))
     )[:, :, None]
 
-    radical.peel.peel(data, u, v, w, l, m, Ax, Ay, phases)
+    radical.peel.peel(mockms.data, u, v, w, l, m, Ax, Ay, phases)
 
-    desired = np.zeros_like(data)
-    assert_allclose(data, desired)
+    desired = np.zeros_like(mockms.data)
+    assert_allclose(mockms.data, desired)
 
 
 @pytest.mark.parametrize(
@@ -39,21 +39,21 @@ def test_peel_with_zero_phases(mockms, Ax, Ay, l, m):
 )
 def test_peel_with_random_phases(mockms, Ax, Ay, l, m):
     phases = np.random.uniform(-np.pi, np.pi, 128)
-    phases = phases[mockms.ANTENNA1] - phases[mockms.ANTENNA2]
+    phases = phases[mockms.ant1] - phases[mockms.ant2]
 
-    u, v, w = mockms.UVW.T[:, :, None] / mockms.CHAN_FREQ
+    u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
 
-    data = np.array([Ax, 0, 0, Ay]) * np.exp(
+    mockms.data = np.array([Ax, 0, 0, Ay]) * np.exp(
         2j * np.pi * (u * l + v * m + w * (np.sqrt(1 - l**2 - m**2) - 1))
     )[:, :, None]
 
     # Distort data  by random phases
-    data *= np.exp(-1j * phases)[:, None, None]
+    mockms.data *= np.exp(-1j * phases)[:, None, None]
 
-    radical.peel.peel(data, u, v, w, l, m, Ax, Ay, phases)
+    radical.peel.peel(mockms.data, u, v, w, l, m, Ax, Ay, phases)
 
-    desired = np.zeros_like(data)
-    assert_allclose(data, desired, atol=1e-7)
+    desired = np.zeros_like(mockms.data)
+    assert_allclose(mockms.data, desired, atol=1e-7)
 
 
 @pytest.mark.parametrize(
@@ -65,15 +65,13 @@ def test_peel_with_random_phases(mockms, Ax, Ay, l, m):
     ]
 )
 def test_unpeel_and_peel(mockms, Ax, Ay, l, m):
-    phases = np.random.uniform(-np.pi, np.pi, 128)
-    phases = phases[mockms.ANTENNA1] - phases[mockms.ANTENNA2]
+    phases = np.random.uniform(-np.pi, np.pi, len(mockms.antids))
+    phases = phases[mockms.ant1] - phases[mockms.ant2]
 
-    u, v, w = mockms.UVW.T[:, :, None] / mockms.CHAN_FREQ
+    u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
 
-    data = np.zeros((u.shape[0], u.shape[1], 4), dtype=np.complex128)
+    radical.peel.unpeel(mockms.data, u, v, w, l, m, Ax, Ay, phases)
+    radical.peel.peel(mockms.data, u, v, w, l, m, Ax, Ay, phases)
 
-    radical.peel.unpeel(data, u, v, w, l, m, Ax, Ay, phases)
-    radical.peel.peel(data, u, v, w, l, m, Ax, Ay, phases)
-
-    desired = np.zeros_like(data)
-    assert_allclose(data, desired, atol=1e-7)
+    desired = np.zeros_like(mockms.data)
+    assert_allclose(mockms.data, desired, atol=1e-7)

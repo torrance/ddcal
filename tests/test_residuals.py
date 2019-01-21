@@ -17,17 +17,15 @@ import radical.residuals
     ]
 )
 def test_firstorder(mockms, Ax, Ay, x, y):
-    u, v, w = mockms.UVW.T[:, :, None] / mockms.CHAN_FREQ
     U, V = mockms.U, mockms.V
+    model = mockms.data[:, :, [True, False, False, True]].copy()
 
-    model = np.ones((u.shape[0], u.shape[1], 2), dtype=np.complex128)
-
-    phases = x * mockms.U + y * mockms.V
+    phases = x * U + y * V
     phases = phases[mockms.ANTENNA1] - phases[mockms.ANTENNA2]
 
     data = np.array([Ax, Ay])[None, None, :] * model * np.exp(-1j * phases)[:, None, None]
 
-    res = radical.residuals.full_firstorder(np.array([Ax, Ay, x, y]), U, V, mockms.ANTENNA1, mockms.ANTENNA2, data, model)
+    res = radical.residuals.full_firstorder(np.array([Ax, Ay, x, y]), U, V, mockms.ant1, mockms.ant2, data, model)
 
     desired = np.zeros_like(res)
     assert_allclose(res, desired, atol=1e-7)
@@ -41,17 +39,15 @@ def test_firstorder(mockms, Ax, Ay, x, y):
     ]
 )
 def test_secondorder(mockms, Ax, Ay, x, y, xx, xy, yy):
-    u, v, w = mockms.UVW.T[:, :, None] / mockms.CHAN_FREQ
     U, V = mockms.U, mockms.V
-
-    model = np.ones((u.shape[0], u.shape[1], 2), dtype=np.complex128)
+    model = mockms.data[:, :, [True, False, False, True]].copy()
 
     phases = x * U + y * V + xx * U**2 + xy * U * V + yy * V**2
-    phases = phases[mockms.ANTENNA1] - phases[mockms.ANTENNA2]
+    phases = phases[mockms.ant1] - phases[mockms.ant2]
 
     data = np.array([Ax, Ay])[None, None, :] * model * np.exp(-1j * phases)[:, None, None]
 
-    res = radical.residuals.full_secondorder(np.array([Ax, Ay, x, y, xx, xy, yy]), U, V, mockms.ANTENNA1, mockms.ANTENNA2, data, model)
+    res = radical.residuals.full_secondorder(np.array([Ax, Ay, x, y, xx, xy, yy]), U, V, mockms.ant1, mockms.ant2, data, model)
 
     desired = np.zeros_like(res)
     assert_allclose(res, desired, atol=1e-7)
