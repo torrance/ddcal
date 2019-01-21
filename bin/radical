@@ -20,7 +20,6 @@ from radical.coordinates import radec_to_lm, lm_to_radec
 from radical.mwabeam import MWABeam
 import radical.skymodel as skymodel
 from radical.peel import peel, unpeel
-import radical.phaserotate as phaserotate
 from radical.phaserotate import phase_rotate
 from radical.solution import Solution
 
@@ -95,8 +94,6 @@ def main():
     data = np.complex128(mset.getcol('DATA'))
     data[flags] = np.nan
 
-    metadata = phaserotate.Metadata(mset)
-    uvw, data = phase_rotate(uvw, data, ra0, dec0, metadata)  # Reset phase direction
     u_lambda, v_lambda, w_lambda = uvw.T[:, :, None] / lambdas
 
     # Create empty solutions and populate Ax, Ay
@@ -131,7 +128,7 @@ def main():
                 logger.debug("Unpeeled elapsed: %g", tm.time() - start)
 
             # Update solution with best fit
-            calibrate.solve(comp, solution, uvw, data, U, V, ant1, ant2, metadata, order)
+            calibrate.solve(comp, solution, uvw, data, U, V, ant1, ant2, ra0, dec0, lambdas, order)
 
             # Check for discrepencies between model flux and fitted flux
             if abs(solution.Ax / comp.apparent(midfreq)[0] - 1) > 0.5 or abs(solution.Ay / comp.apparent(midfreq)[1] - 1) > 0.5:

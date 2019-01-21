@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 
-def solve(comp, solution, uvw, data, U, V, ant1, ant2, metadata, order):
+def solve(comp, solution, uvw, data, U, V, ant1, ant2, ra0, dec0, lambdas, order):
     # Phase rotate onto source and average in frequency
-    _, rotated = phase_rotate(uvw, data[:, :, [True, False, False, True]], comp.ra, comp.dec, metadata)
+    _, rotated = phase_rotate(uvw, data[:, :, [True, False, False, True]], comp.ra, comp.dec, ra0, dec0, lambdas)
     start = tm.time()
     rotated = freq_average(rotated)[:, None, :]
     elapsed = tm.time() - start
