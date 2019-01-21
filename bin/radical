@@ -9,7 +9,6 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 import astropy.units as units
 from astropy.wcs import WCS
-from casacore.tables import table, taql, addImagingColumns
 import numpy as np
 from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
@@ -17,6 +16,7 @@ from scipy.ndimage import gaussian_filter
 import radical.calibrate as calibrate
 import radical.constants as constants
 from radical.coordinates import radec_to_lm, lm_to_radec
+from radical.measurementset import MeasurementSet
 from radical.mwabeam import MWABeam
 import radical.skymodel as skymodel
 from radical.peel import peel, unpeel
@@ -43,8 +43,10 @@ def main():
     logger = logging.getLogger(__name__)
     logger.setLevel('DEBUG')
 
+    mset = MeasurementSet(args.ms, refant=args.refant)
     center = SkyCoord(args.center, unit=(units.hourangle, units.degree))
 
+    # Parse skymodel and load sources
     with open(args.model) as f:
         sources = skymodel.parse(f)
 
@@ -53,15 +55,6 @@ def main():
     components = [c for source in sources for c in source.components]
     logger.info("%d sources loaded", len(components))
 
-    # Open and process measurement set
-    mset = table(args.ms, readonly=False, ack=False)
-    antids = np.array(range(0, len(mset.ANTENNA)))
-    ra0, dec0 = mset.FIELD.getcell('PHASE_DIR', 0)[0]
-    freqs = mset.SPECTRAL_WINDOW.getcell('CHAN_FREQ', 0)
-    lambdas = constants.c / freqs
-    midfreq = np.array([(max(freqs) + min(freqs)) / 2])
-    midlambda = constants.c / midfreq
-
     logger.info("Calculating apparent flux of model sources...")
     # Set beam for each component so that we can later calculate apparent flux
     beam = MWABeam(args.metafits)
@@ -69,38 +62,14 @@ def main():
         comp.beam = beam
 
     # Calculate apparent flux and reorder components from brightest to dimmest
-    components = sorted(components, reverse=True, key=lambda x: sum(x.apparent(midfreq)))
+    components = sorted(components, reverse=True, key=lambda x: sum(x.apparent(mset.midfreq)))
     logger.info("Model sources ordered by apparent flux")
-
-    # Calculate antenna positions wrt antenna 0
-    times = sorted(set(mset.getcol('TIME')))
-    midtime = times[len(times) // 2]
-    refant = args.refant
-    tmp = taql("select UVW, ANTENNA2 from $mset where TIME = $midtime and ANTENNA1 = $refant")
-    (_U, _V, _), antennas = tmp.getcol('UVW').T, tmp.getcol('ANTENNA2')
-
-    # Force U, V indices to align with antenna IDs
-    U = np.zeros_like(antids, dtype=np.float64)
-    U[antennas] = _U
-    V = np.zeros_like(antids, dtype=np.float64)
-    V[antennas] = _V
-
-    # Get non-flagged rows
-    mset = taql("select * from $mset where not FLAG_ROW")
-    flags = mset.getcol('FLAG')
-    ant1 = mset.getcol('ANTENNA1')
-    ant2 = mset.getcol('ANTENNA2')
-    uvw = mset.getcol('UVW')
-    data = np.complex128(mset.getcol('DATA'))
-    data[flags] = np.nan
-
-    u_lambda, v_lambda, w_lambda = uvw.T[:, :, None] / lambdas
 
     # Create empty solutions and populate Ax, Ay
     solutions = []
     for comp in components:
         solution = Solution()
-        solution.set_params(comp.apparent(midfreq))
+        solution.set_params(comp.apparent(mset.midfreq))
         solutions.append(solution)
 
     # Begin directional calibration
@@ -121,25 +90,25 @@ def main():
 
                 # Unpeel
                 start = tm.time()
-                phases = solution.phases(U, V)
-                phases = phases[ant1] - phases[ant2]
-                l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
-                unpeel(data, u_lambda, v_lambda, w_lambda, l, m, solution.Ax, solution.Ay, phases)
+                phases = solution.phases(mset.U, mset.V)
+                phases = phases[mset.ant1] - phases[mset.ant2]
+                l, m = radec_to_lm(comp.ra, comp.dec, mset.ra0, mset.dec0)
+                unpeel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, solution.Ax, solution.Ay, phases)
                 logger.debug("Unpeeled elapsed: %g", tm.time() - start)
 
             # Update solution with best fit
-            calibrate.solve(comp, solution, uvw, data, U, V, ant1, ant2, ra0, dec0, lambdas, order)
+            calibrate.solve(comp, solution, mset, order)
 
             # Check for discrepencies between model flux and fitted flux
-            if abs(solution.Ax / comp.apparent(midfreq)[0] - 1) > 0.5 or abs(solution.Ay / comp.apparent(midfreq)[1] - 1) > 0.5:
+            if abs(solution.Ax / comp.apparent(mset.midfreq)[0] - 1) > 0.5 or abs(solution.Ay / comp.apparent(mset.midfreq)[1] - 1) > 0.5:
                 logger.warning("Flux discrepency!")
 
             # Peel the source
             start = tm.time()
-            phases = solution.phases(U, V)
-            phases = phases[ant1] - phases[ant2]
-            l, m = radec_to_lm(comp.ra, comp.dec, ra0, dec0)
-            peel(data, u_lambda, v_lambda, w_lambda, l, m, solution.Ax, solution.Ay, phases)
+            phases = solution.phases(mset.U, mset.V)
+            phases = phases[mset.ant1] - phases[mset.ant2]
+            l, m = radec_to_lm(comp.ra, comp.dec, mset.ra0, mset.dec0)
+            peel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, solution.Ax, solution.Ay, phases)
             logger.debug("Peeled elapsed: %g", tm.time() - start)
 
     # Create lists of lm coordinates in the FITS projection for calibration directions
@@ -148,10 +117,10 @@ def main():
     directions_lm = radec_to_lm(ras, decs, center.ra.rad, center.dec.rad)
 
     # Solve phases for each antenna for each calibration direction
-    phases = np.empty((len(antids), len(directions_lm)))
+    phases = np.empty((len(mset.antids), len(directions_lm.T)))
     for i, solution in enumerate(solutions):
         if not solution.failed:
-            phases[:, i] = solution.phases(U, V)
+            phases[:, i] = solution.phases(mset.U, mset.V)
 
     gaintable = table('ddcal.gcal', readonly=False)
     gains = gaintable.getcol('CPARAM')
@@ -173,7 +142,7 @@ def main():
 
     logger.info("Creating TEC image of dimensions (%d, %d)", width, height)
 
-    data = np.zeros((1, 1, len(antids), height, width), dtype=np.float)  # [time, frequency, antennas, dec, ra]
+    data = np.zeros((1, 1, len(mset.antids), height, width), dtype=np.float)  # [time, frequency, antennas, dec, ra]
     Atec = fits.PrimaryHDU(data)
 
     Atec.header['CTYPE1'] = 'RA---SIN'
@@ -194,13 +163,13 @@ def main():
 
     Atec.header['CTYPE4'] = 'FREQ'
     Atec.header['CRPIX4'] = 1
-    Atec.header['CRVAL4'] = midfreq[0]
+    Atec.header['CRVAL4'] = mset.midfreq[0]
     Atec.header['CDELT4'] = 1
     Atec.header['CUNIT4'] = 'Hz'
 
     Atec.header['CTYPE5'] = 'TIME'
     Atec.header['CRPIX5'] = 1
-    Atec.header['CRVAL5'] = midtime  # FIXME
+    Atec.header['CRVAL5'] = mset.midtime  # FIXME
     Atec.header['CDELT5'] = 1
 
     wcs = WCS(Atec.header)
@@ -212,7 +181,7 @@ def main():
     ret = wcs.all_pix2world([[x / args.oversample - 1/args.oversample, y / args.oversample - 1/args.oversample, 0, 0, 0] for x, y in pixels], 0)
     grid_lm = radec_to_lm(np.radians(ret.T[0]), np.radians(ret.T[1]), center.ra.rad, center.dec.rad)
 
-    for i in antids:
+    for i in mset.antids:
         # Compute interpolated phases
         phases_grid = griddata(directions_lm.T, phases[i], grid_lm.T, method='nearest')
         phases_grid = np.reshape(phases_grid, (args.oversample * height, args.oversample * width))  # [ dec, ra ]
@@ -223,7 +192,7 @@ def main():
         # Downsample
         phases_grid = phases_grid[1::args.oversample, 1::args.oversample]
 
-        data[0, 0, i] = phases_grid / 8.44797245E9 * midfreq
+        data[0, 0, i] = phases_grid / 8.44797245E9 * mset.midfreq
 
     Atec.writeto(args.output, overwrite=True)
 
