@@ -48,3 +48,8 @@ class Solution(object):
             xy * U * V +
             yy * V**2
         )
+
+    def phasecorrections(self, mset):
+        phases = self.phases(mset.U, mset.V)
+        phases = phases[mset.ant1] - phases[mset.ant2]
+        return phases

@@ -18,6 +18,7 @@ logger.setLevel('DEBUG')
 def solve(comp, solution, mset, order):
     # Phase rotate onto source and average in frequency
     _, rotated = phase_rotate(mset.uvw, mset.data[:, :, [True, False, False, True]], comp.ra, comp.dec, mset.ra0, mset.dec0, mset.lambdas)
+
     start = tm.time()
     rotated = freq_average(rotated)[:, None, :]
     elapsed = tm.time() - start
@@ -58,6 +59,8 @@ def solve(comp, solution, mset, order):
     # If fit converged, add solution or else mark it as failed
     if res.success:
         solution.set_params(res.x)
+        solution.snr = snr(rotated, solution, mset)
+        logger.debug("SNR of fit: %g", solution.snr)
     else:
         logger.warning("Fit failed; marking solution as failed")
         solution.failed = True
@@ -71,3 +74,22 @@ def freq_average(data):
             averaged[row, pol] = np.nanmean(data[row, :, pol])
 
     return averaged
+
+
+def snr(data, solution, mset):
+    start = tm.time()
+
+    noise = data * np.exp(1j * solution.phasecorrections(mset))[:, None, None]
+    noise[:, :, 0] -= solution.Ax
+    noise[:, :, 1] -= solution.Ay
+    noise = noise[np.isfinite(noise)]
+
+    signal = 0.5 * (solution.Ax + solution.Ay) * len(noise)
+    noise = abs(noise).sum()
+
+    snr = signal / noise
+
+    elapsed = tm.time() - start
+    logger.debug("SNR calculation elapsed: %g",  elapsed)
+
+    return snr

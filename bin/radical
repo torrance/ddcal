@@ -90,10 +90,8 @@ def main():
 
                 # Unpeel
                 start = tm.time()
-                phases = solution.phases(mset.U, mset.V)
-                phases = phases[mset.ant1] - phases[mset.ant2]
                 l, m = radec_to_lm(comp.ra, comp.dec, mset.ra0, mset.dec0)
-                unpeel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, solution.Ax, solution.Ay, phases)
+                unpeel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, solution.Ax, solution.Ay, solution.phasecorrections(mset))
                 logger.debug("Unpeeled elapsed: %g", tm.time() - start)
 
             # Update solution with best fit
@@ -105,10 +103,8 @@ def main():
 
             # Peel the source
             start = tm.time()
-            phases = solution.phases(mset.U, mset.V)
-            phases = phases[mset.ant1] - phases[mset.ant2]
             l, m = radec_to_lm(comp.ra, comp.dec, mset.ra0, mset.dec0)
-            peel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, solution.Ax, solution.Ay, phases)
+            peel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, solution.Ax, solution.Ay, solution.phasecorrections(mset))
             logger.debug("Peeled elapsed: %g", tm.time() - start)
 
     # Create lists of lm coordinates in the FITS projection for calibration directions
