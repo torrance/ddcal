@@ -10,7 +10,7 @@ import radical.calibrate as calibrate
 import radical.constants as constants
 from radical.coordinates import radec_to_lm
 import radical.phaserotate as phaserotate
-from radical.skymodel import Component
+from radical.skymodel import Model
 from radical.solution import Solution
 
 
@@ -22,7 +22,7 @@ from radical.solution import Solution
         (20, 47),
     ]
 )
-def test_firstorder_amplitudefit_centered(mockms, mockcomp, Ax, Ay):
+def test_firstorder_amplitudefit_centered(mockms, mockcomp1, Ax, Ay):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(mockms.ra0, mockms.dec0, mockms.ra0, mockms.dec0)
 
@@ -30,12 +30,13 @@ def test_firstorder_amplitudefit_centered(mockms, mockcomp, Ax, Ay):
         2j * np.pi * (u*l + v*m + w*(np.sqrt(1 - l**2 - m**2) - 1))
     )[:, :, None]
 
-    solution = Solution()
+    solution = Solution(ncomp=1)
 
-    mockcomp.ra = mockms.ra0
-    mockcomp.dec = mockms.dec0
+    mockcomp1.ra = mockms.ra0
+    mockcomp1.dec = mockms.dec0
+    source = Model('mymodel', [mockcomp1])
 
-    calibrate.solve(mockcomp, solution, mockms, 1)
+    calibrate.solve(source, solution, mockms, 1)
     params = solution.get_params(2)
 
     assert_allclose(params, [Ax, Ay, 0, 0, 0, 0, 0], atol=1e-15)
@@ -47,7 +48,7 @@ def test_firstorder_amplitudefit_centered(mockms, mockcomp, Ax, Ay):
         (4, 3.5, 0.19, -0.32),
     ]
 )
-def test_firstorder_amplitudefit(mockms, mockcomp, Ax, Ay, ra, dec):
+def test_firstorder_amplitudefit(mockms, mockcomp1, Ax, Ay, ra, dec):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -55,12 +56,13 @@ def test_firstorder_amplitudefit(mockms, mockcomp, Ax, Ay, ra, dec):
         2j * np.pi * (u*l + v*m + w*(np.sqrt(1 - l**2 - m**2) - 1))
     )[:, :, None]
 
-    solution = Solution()
+    solution = Solution(ncomp=1)
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    calibrate.solve(mockcomp, solution, mockms, 1)
+    calibrate.solve(source, solution, mockms, 1)
     params = solution.get_params(2)
 
     assert_allclose(params[:2], [Ax, Ay], rtol=1e-2)
@@ -74,7 +76,7 @@ def test_firstorder_amplitudefit(mockms, mockcomp, Ax, Ay, ra, dec):
         (4, 3.5, 0.19, -0.32),
     ]
 )
-def test_firstorder__multiplesources_amplitudefit(mockms, mockcomp, Ax, Ay, ra, dec):
+def test_firstorder__multiplesources_amplitudefit(mockms, mockcomp1, Ax, Ay, ra, dec):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -87,12 +89,13 @@ def test_firstorder__multiplesources_amplitudefit(mockms, mockcomp, Ax, Ay, ra, 
     mockms.data[:, :, 0] += Ax
     mockms.data[:, :, 3] += Ay
 
-    solution = Solution()
+    solution = Solution(ncomp=1)
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    calibrate.solve(mockcomp, solution, mockms, 1)
+    calibrate.solve(source, solution, mockms, 1)
     params = solution.get_params(2)
 
     assert_allclose(params[:2], [Ax, Ay], rtol=1e-2)
@@ -106,7 +109,7 @@ def test_firstorder__multiplesources_amplitudefit(mockms, mockcomp, Ax, Ay, ra, 
         (4, 3.5, 3e-5, -3.5e-5),
     ]
 )
-def test_firstorder_centered(mockms, mockcomp, Ax, Ay, x, y):
+def test_firstorder_centered(mockms, mockcomp1, Ax, Ay, x, y):
     mockms.data[:, :, 0] = Ax
     mockms.data[:, :, 3] = Ay
 
@@ -114,11 +117,12 @@ def test_firstorder_centered(mockms, mockcomp, Ax, Ay, x, y):
     phases = phases[mockms.ant1] - phases[mockms.ant2]
     mockms.data *= np.exp(-1j * phases)[:, None, None]
 
-    mockcomp.ra = mockms.ra0
-    mockcomp.dec = mockms.dec0
+    mockcomp1.ra = mockms.ra0
+    mockcomp1.dec = mockms.dec0
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
     params = solution.get_params(2)
 
     assert_allclose(params[:2], [Ax, Ay], rtol=5e-2)
@@ -133,7 +137,7 @@ def test_firstorder_centered(mockms, mockcomp, Ax, Ay, x, y):
         (1.2, 0.9, 0.19, -0.32, -4e-5, 2e-5),
     ]
 )
-def test_firstorder(mockms, mockcomp, Ax, Ay, ra, dec, x, y):
+def test_firstorder(mockms, mockcomp1, Ax, Ay, ra, dec, x, y):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -145,11 +149,12 @@ def test_firstorder(mockms, mockcomp, Ax, Ay, ra, dec, x, y):
     phases = phases[mockms.ant1] - phases[mockms.ant2]
     mockms.data *= np.exp(-1j * phases)[:, None, None]
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
     params = solution.get_params(2)
 
     assert_allclose(params[:2], [Ax, Ay], rtol=1e-2)
@@ -164,7 +169,7 @@ def test_firstorder(mockms, mockcomp, Ax, Ay, ra, dec, x, y):
         (1.2, 0.9, 0.19, -0.32, -4e-5, 2e-5),
     ]
 )
-def test_firstorder_with_noise(mockms, mockcomp, Ax, Ay, ra, dec, x, y):
+def test_firstorder_with_noise(mockms, mockcomp1, Ax, Ay, ra, dec, x, y):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -178,14 +183,15 @@ def test_firstorder_with_noise(mockms, mockcomp, Ax, Ay, ra, dec, x, y):
 
     mockms.data += np.random.normal(0, 20, mockms.data.shape) + 1j *np.random.normal(0, 20, mockms.data.shape)
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
     solphases = solution.phases(mockms.U, mockms.V)
 
-    assert_allclose([solution.Ax, solution.Ay], [Ax, Ay], rtol=5e-2)
+    assert_allclose(solution.get_params(0), [Ax, Ay], rtol=5e-2)
     assert_allclose(solphases, antphases, atol=5e-2)
 
 
@@ -196,7 +202,7 @@ def test_firstorder_with_noise(mockms, mockcomp, Ax, Ay, ra, dec, x, y):
         (1.2, 0.9, 0.19, -0.32, -4e-5, 2e-5),
     ]
 )
-def test_firstorder_multiple_sources_with_noise(mockms, mockcomp, Ax, Ay, ra, dec, x, y):
+def test_firstorder_multiple_sources_with_noise(mockms, mockcomp1, Ax, Ay, ra, dec, x, y):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -220,14 +226,15 @@ def test_firstorder_multiple_sources_with_noise(mockms, mockcomp, Ax, Ay, ra, de
 
     mockms.data += np.random.normal(0, 20, mockms.data.shape) + 1j *np.random.normal(0, 20, mockms.data.shape)
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
     solphases = solution.phases(mockms.U, mockms.V)
 
-    assert_allclose([solution.Ax, solution.Ay], [Ax, Ay], rtol=5e-2)
+    assert_allclose(solution.get_params(0), [Ax, Ay], rtol=5e-2)
     assert_allclose(solphases, antphases, atol=5e-2)
 
 
@@ -238,7 +245,7 @@ def test_firstorder_multiple_sources_with_noise(mockms, mockcomp, Ax, Ay, ra, de
         (1.2, 0.9, 0.19, -0.32, -4e-5, 2e-5, 4e-8, -2e-8, -3e-7),
     ]
 )
-def test_secondorder(mockms, mockcomp, Ax, Ay, ra, dec, x, y, xx, xy, yy):
+def test_secondorder(mockms, mockcomp1, Ax, Ay, ra, dec, x, y, xx, xy, yy):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -251,12 +258,13 @@ def test_secondorder(mockms, mockcomp, Ax, Ay, ra, dec, x, y, xx, xy, yy):
     phases = phases[mockms.ant1] - phases[mockms.ant2]
     mockms.data *= np.exp(-1j * phases)[:, None, None]
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
-    calibrate.solve(mockcomp, solution, mockms, 2)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
+    calibrate.solve(source, solution, mockms, 2)
     params = solution.get_params(2)
 
     assert_allclose(params[:2], [Ax, Ay], rtol=5e-2)
@@ -271,7 +279,7 @@ def test_secondorder(mockms, mockcomp, Ax, Ay, ra, dec, x, y, xx, xy, yy):
         (1.2, 0.9, 0.19, -0.32, -4e-5, 2e-5, 4e-8, -2e-8, -3e-7),
     ]
 )
-def test_secondorder_multiple_sources(mockms, mockcomp, Ax, Ay, ra, dec, x, y, xx, xy, yy):
+def test_secondorder_multiple_sources(mockms, mockcomp1, Ax, Ay, ra, dec, x, y, xx, xy, yy):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -296,12 +304,13 @@ def test_secondorder_multiple_sources(mockms, mockcomp, Ax, Ay, ra, dec, x, y, x
 
     mockms.data += np.random.normal(0, 20, mockms.data.shape) + 1j *np.random.normal(0, 20, mockms.data.shape)
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
-    calibrate.solve(mockcomp, solution, mockms, 2)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
+    calibrate.solve(source, solution, mockms, 2)
     params = solution.get_params(2)
 
     assert_allclose(params[:2], [Ax, Ay], rtol=5e-2)
@@ -316,7 +325,7 @@ def test_secondorder_multiple_sources(mockms, mockcomp, Ax, Ay, ra, dec, x, y, x
         (1.2, 0.9, 0.19, -0.32, -4e-5, 2e-5, 4e-8, -2e-8, -3e-7),
     ]
 )
-def test_secondorder_multiple_sources(mockms, mockcomp, Ax, Ay, ra, dec, x, y, xx, xy, yy):
+def test_secondorder_multiple_sources(mockms, mockcomp1, Ax, Ay, ra, dec, x, y, xx, xy, yy):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -339,15 +348,16 @@ def test_secondorder_multiple_sources(mockms, mockcomp, Ax, Ay, ra, dec, x, y, x
     phases = antphases[mockms.ant1] - antphases[mockms.ant2]
     mockms.data *= np.exp(-1j * phases)[:, None, None]
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
-    calibrate.solve(mockcomp, solution, mockms, 2)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
+    calibrate.solve(source, solution, mockms, 2)
     solphases = solution.phases(U, V)
 
-    assert_allclose([solution.Ax, solution.Ay], [Ax, Ay], rtol=5e-2)
+    assert_allclose(solution.get_params(0), [Ax, Ay], rtol=5e-2)
     assert_allclose(solphases, antphases, atol=5e-2)
 
 
@@ -358,7 +368,7 @@ def test_secondorder_multiple_sources(mockms, mockcomp, Ax, Ay, ra, dec, x, y, x
         (10, 6.6, 0.19, -0.32, -4e-5, 2e-5, 4e-8, -2e-7, -3e-8),
     ]
 )
-def test_secondorder_multiple_sources_with_noise(mockms, mockcomp, Ax, Ay, ra, dec, x, y, xx, xy, yy):
+def test_secondorder_multiple_sources_with_noise(mockms, mockcomp1, Ax, Ay, ra, dec, x, y, xx, xy, yy):
     u, v, w = mockms.u_lambda, mockms.v_lambda, mockms.w_lambda
     l, m = radec_to_lm(ra, dec, mockms.ra0, mockms.dec0)
 
@@ -383,14 +393,15 @@ def test_secondorder_multiple_sources_with_noise(mockms, mockcomp, Ax, Ay, ra, d
 
     mockms.data += np.random.normal(0, 20, mockms.data.shape) + 1j *np.random.normal(0, 20, mockms.data.shape)
 
-    mockcomp.ra = ra
-    mockcomp.dec = dec
+    mockcomp1.ra = ra
+    mockcomp1.dec = dec
+    source = Model('mymodel', [mockcomp1])
 
-    solution = Solution()
-    calibrate.solve(mockcomp, solution, mockms, 1)
-    calibrate.solve(mockcomp, solution, mockms, 2)
+    solution = Solution(ncomp=1)
+    calibrate.solve(source, solution, mockms, 1)
+    calibrate.solve(source, solution, mockms, 2)
 
     solphases = solution.phases(mockms.U, mockms.V)
 
-    assert_allclose([solution.Ax, solution.Ay], [Ax, Ay], rtol=5e-2)
+    assert_allclose(solution.get_params(0), [Ax, Ay], rtol=5e-2)
     assert_allclose(solphases, antphases, atol=5e-2)

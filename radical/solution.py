@@ -2,27 +2,19 @@ from __future__ import print_function, division
 
 
 class Solution(object):
-    _x_scale=[1e-2, 1e-2, 1e-6, 1e-6, 1e-9, 1e-9, 1e-9]
-
-    def __init__(self):
-        self.params = [1, 1] + [0] * 5
+    def __init__(self, ncomp):
+        self.ncomp = ncomp
+        self.params = [1] * 2 * ncomp + [0] * 5
+        self._x_scale = [1e-2] * 2 * ncomp + [1e-6, 1e-6, 1e-9, 1e-9, 1e-9]
         self.failed = False
-
-    @property
-    def Ax(self):
-        return self.params[0]
-
-    @property
-    def Ay(self):
-        return self.params[1]
 
     def get_params(self, order):
         if order == 0:
-            return self.params[:2]
+            return self.params[:2*self.ncomp]
         elif order == 1:
-            return self.params[:4]
+            return self.params[:2*self.ncomp + 2]
         elif order == 2:
-            return self.params[:7]
+            return self.params[:2*self.ncomp + 5]
 
         raise Exception("Unknown solution order requested")
 
@@ -31,16 +23,20 @@ class Solution(object):
 
     def x_scale(self, order):
         if order == 0:
-            return self._x_scale[:2]
+            return self._x_scale[:2*self.ncomp]
         elif order == 1:
-            return self._x_scale[:4]
+            return self._x_scale[:2*self.ncomp + 2]
         elif order == 2:
-            return self._x_scale[:7]
+            return self._x_scale[:2*self.ncomp + 5]
 
         raise Exception("Unknown solution order requested")
 
+    @property
+    def amplitudes(self):
+        return [self.params[i:i+2] for i in range(self.ncomp)]
+
     def phases(self, U, V):
-        x, y, xx, xy, yy = self.params[2:]
+        x, y, xx, xy, yy = self.params[2*self.ncomp:]
         return (
             x * U +
             y * V +

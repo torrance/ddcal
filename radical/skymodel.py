@@ -94,6 +94,47 @@ class Model(object):
         self.name = name
         self.components = components
 
+    def angular_mean(self):
+        """
+        Find a ra, dec value that is the mean of component positions.
+        For a single component source, this will just be the first component's
+        position.
+        """
+        ras = np.array([comp.ra for comp in self.components])
+        decs = np.array([comp.dec for comp in self.components])
+
+        # Covert coordinates into spherical coordinates
+        # (theta = polar angle, phi = azimuthal angle)
+        thetas = (decs - np.pi / 2) * -1
+        phis = ras
+
+        # Convert to cartesian and average
+        x = np.mean(np.sin(thetas) * np.cos(phis))
+        y = np.mean(np.sin(thetas) * np.sin(phis))
+        z = np.mean(np.cos(thetas))
+
+        # Convert back to spherical
+        r = np.sqrt(x**2 + y**2 + z**2)
+        theta = np.arccos(z / r)
+        phi = np.arctan2(y, x)
+
+        # Convert from spherical to ra, dec
+        ra = phi % (2 * np.pi)
+        dec = theta * -1 + np.pi / 2
+
+        return ra, dec
+
+    @property
+    def ra(self):
+        return self.angular_mean()[0]
+
+    @property
+    def dec(self):
+        return self.angular_mean()[1]
+
+    def apparent(self, midfreq):
+        return sum([sum(comp.apparent(midfreq)) for comp in self.components])
+
 
 class Component(object):
     def __init__(self, position, measurements):

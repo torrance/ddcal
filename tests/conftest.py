@@ -7,7 +7,12 @@ from radical.measurementset import MeasurementSet
 
 
 @pytest.fixture()
-def mockcomp():
+def mockcomp1():
+    return MockComponent()
+
+
+@pytest.fixture()
+def mockcomp2():
     return MockComponent()
 
 
@@ -31,8 +36,10 @@ def mockms():
 
 
 class MockComponent(object):
-    def __init__(self):
+    def __init__(self, ra=None, dec=None):
         self.position = self
+        self.ra = ra
+        self.dec = dec
 
     def to_string(self, fmt):
         return "%g %g" % (self.ra, self.dec)

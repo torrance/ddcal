@@ -43,5 +43,11 @@ class MeasurementSet(object):
 
         self.u_lambda, self.v_lambda, self.w_lambda = self.uvw.T[:, :, None] / self.lambdas
 
+        # Calculate std deviation of data, where we assume (!) visibilities are overwhlemingly
+        # noise and normally distributed.
+        print("Calculating visbility statistics...")
+        self.sigma = np.sqrt(0.5 * (np.nanstd(self.data.real)**2 + np.nanstd(self.data.imag)**2)) / np.sqrt(len(self.freqs))
+        print("sigma when averaged across all channels: %g" % self.sigma)
+
     def __getattr__(self, name):
         return getattr(self.mset, name)

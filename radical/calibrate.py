@@ -7,6 +7,7 @@ from numba import njit, prange, complex128
 import numpy as np
 from scipy.optimize import least_squares
 
+from radical.coordinates import radec_to_lm
 from radical.phaserotate import phase_rotate
 import radical.residuals as residuals
 
@@ -15,23 +16,29 @@ logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 
-def solve(comp, solution, mset, order):
+def solve(src, solution, mset, order):
     # Phase rotate onto source and average in frequency
-    _, rotated = phase_rotate(mset.uvw, mset.data[:, :, [True, False, False, True]], comp.ra, comp.dec, mset.ra0, mset.dec0, mset.lambdas)
+    uvw, rotated = phase_rotate(mset.uvw, mset.data[:, :, [True, False, False, True]], src.ra, src.dec, mset.ra0, mset.dec0, mset.lambdas)
 
     start = tm.time()
     rotated = freq_average(rotated)[:, None, :]
     elapsed = tm.time() - start
     logger.debug("Frequency averaging elapsed: %g", elapsed)
 
-    # Create model: point source located at phase center
-    model = np.ones_like(rotated)
+    # Create array of unscaled (flux = 1) point sources for each component
+    start = tm.time()
+    u_lambda, v_lambda, w_lambda = uvw.T[:, :, None] / mset.midlambda
+    models = np.empty((len(src.components), rotated.shape[0], rotated.shape[1]), dtype=np.complex128)
+    for i, comp in enumerate(src.components):
+        l, m = radec_to_lm(comp.ra, comp.dec, src.ra, src.dec)
+        models[i] = np.exp(2j * np.pi * (
+            u_lambda*l + v_lambda*m + w_lambda*(np.sqrt(1 - l**2 - m**2) - 1)
+        ))
+    elapsed = tm.time() - start
+    logger.debug("Model creation elapsed: %g", elapsed)
 
     # Fit
-    logger.debug(
-        "Fitting source located at %s...",
-        comp.position.to_string('hmsdms'),
-    )
+    logger.debug("Fitting source '%s'...", src.name)
     if order == 1:
         f = residuals.full_firstorder
     elif order == 2:
@@ -41,26 +48,25 @@ def solve(comp, solution, mset, order):
     res = least_squares(
         f,
         x0=solution.get_params(order=order),
-        args=(mset.U, mset.V, mset.ant1, mset.ant2, rotated, model),
-        verbose=2,
+        args=(mset.U, mset.V, mset.ant1, mset.ant2, rotated, models),
+        verbose=1,
         x_scale=solution.x_scale(order=order),
     )
     logger.debug("Fit (order=%d) elapsed: %g", order, tm.time() - start)
     logger.debug(res.message)
-    logger.debug(
-        "Model flux: (%g, %g) versus fit flux (Ax Ay): %g %g",
-        solution.Ax,
-        solution.Ay,
-        res.x[0],
-        res.x[1],
-    )
     logger.debug("Fit params:" + " %g" * len(res.x), *res.x)
+
+    # Calculate reduced chi squared
+    # res.cost = 0.5 * sum(residuals**2)
+    # nsamples = xx, yy, real, imaginary, ie. 4 * correlation rows
+    redchisq = reduced_chi_squared(2 * res.cost, 4 * sum(np.isfinite(rotated[:, 0, 0])), len(res.x), mset.sigma)
+    logger.debug("Reduced chi squared: %g", redchisq)
 
     # If fit converged, add solution or else mark it as failed
     if res.success:
         solution.set_params(res.x)
-        solution.snr = snr(rotated, solution, mset)
-        logger.debug("SNR of fit: %g", solution.snr)
+        #solution.snr = snr(rotated, solution, mset)
+        #logger.debug("SNR of fit: %g", solution.snr)
     else:
         logger.warning("Fit failed; marking solution as failed")
         solution.failed = True
@@ -76,20 +82,6 @@ def freq_average(data):
     return averaged
 
 
-def snr(data, solution, mset):
-    start = tm.time()
-
-    noise = data * np.exp(1j * solution.phasecorrections(mset))[:, None, None]
-    noise[:, :, 0] -= solution.Ax
-    noise[:, :, 1] -= solution.Ay
-    noise = noise[np.isfinite(noise)]
-
-    signal = 0.5 * (solution.Ax + solution.Ay) * len(noise)
-    noise = abs(noise).sum()
-
-    snr = signal / noise
-
-    elapsed = tm.time() - start
-    logger.debug("SNR calculation elapsed: %g",  elapsed)
-
-    return snr
+def reduced_chi_squared(squaredsum, nsamples, nparams, sigma):
+    chi_squared = squaredsum / sigma**2
+    return chi_squared / (nsamples - nparams)
