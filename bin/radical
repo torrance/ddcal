@@ -109,12 +109,13 @@ def main():
             calibrate.solve(src, solution, mset, order)
 
             # Peel the source
-            start = tm.time()
-            phases = solution.phasecorrections(mset)
-            for (Ax, Ay), comp in zip(solution.amplitudes, src.components):
-                l, m = radec_to_lm(comp.ra, comp.dec, mset.ra0, mset.dec0)
-                peel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, Ax, Ay, phases)
-            logger.debug("Peeled elapsed: %g", tm.time() - start)
+            if not solution.failed:
+                start = tm.time()
+                phases = solution.phasecorrections(mset)
+                for (Ax, Ay), comp in zip(solution.amplitudes, src.components):
+                    l, m = radec_to_lm(comp.ra, comp.dec, mset.ra0, mset.dec0)
+                    peel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, Ax, Ay, phases)
+                logger.debug("Peeled elapsed: %g", tm.time() - start)
 
     # Create ms of peeling sources for debugging purposes
     if args.debug:
