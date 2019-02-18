@@ -4,6 +4,7 @@ from __future__ import print_function, division
 from argparse import ArgumentParser
 import logging
 import os.path
+import sys
 import time as tm
 
 from astropy.coordinates import SkyCoord
@@ -186,6 +187,9 @@ def main():
     Atec.header['CRPIX5'] = 1
     Atec.header['CRVAL5'] = mset.midtime  # FIXME
     Atec.header['CDELT5'] = 1
+
+    Atec.header['HISTORY'] = 'radical ' + ' '.join(sys.argv[1:])
+    print(' '.join(sys.argv))
 
     wcs = WCS(Atec.header)
 
