@@ -56,17 +56,9 @@ def solve(src, solution, mset, order):
     logger.debug(res.message)
     logger.debug("Fit params:" + " %g" * len(res.x), *res.x)
 
-    # Calculate reduced chi squared
-    # res.cost = 0.5 * sum(residuals**2)
-    # nsamples = xx, yy, real, imaginary, ie. 4 * correlation rows
-    redchisq = reduced_chi_squared(2 * res.cost, 4 * sum(np.isfinite(rotated[:, 0, 0])), len(res.x), mset.sigma)
-    logger.debug("Reduced chi squared: %g", redchisq)
-
     # If fit converged, add solution or else mark it as failed
     if res.success:
         solution.set_params(res.x)
-        #solution.snr = snr(rotated, solution, mset)
-        #logger.debug("SNR of fit: %g", solution.snr)
     else:
         logger.warning("Fit failed; marking solution as failed")
         solution.failed = True
