@@ -7,7 +7,7 @@ import radical.constants as constants
 
 class MeasurementSet(object):
     def __init__(self, filename, refant=0):
-        self.mset = table(filename, readonly=True, ack=False)
+        self.mset = table(filename, readonly=False, ack=False)
         mset = self.mset
 
         self.antids = np.array(range(0, len(mset.ANTENNA)))
