@@ -5,34 +5,28 @@ from argparse import ArgumentParser
 import csv
 import logging
 import os.path
-import sys
 import time as tm
 
 from astropy.coordinates import SkyCoord
-from astropy.io import fits
 import astropy.units as units
-from astropy.wcs import WCS
 from casacore.tables import table, maketabdesc, makearrcoldesc
 import numpy as np
-from scipy.interpolate import griddata
-from scipy.ndimage import gaussian_filter
 
 import radical.calibrate as calibrate
-import radical.constants as constants
-from radical.coordinates import radec_to_lm, lm_to_radec
+from radical.coordinates import radec_to_lm
 from radical.measurementset import MeasurementSet
 from radical.mwabeam import MWABeam
 import radical.skymodel as skymodel
 from radical.peel import peel, unpeel
-from radical.phaserotate import phase_rotate
 from radical.solution import Solution
+import radical.tecscreen as tecscreen
 
 
 def main():
     parser = ArgumentParser("radical", description="radical: Radio Astronomy Directional Ionospheric CALibration")
     parser.add_argument('--ms', required=True, help="The measurement set to calibrate")
     parser.add_argument('--model', required=True, help="The sky model (skymodel fileformat 1.1)")
-    parser.add_argument('--output', default='tec.fits', help="The output FITS file contains the phase corrections")
+    parser.add_argument('--out', default='tec.fits', help="The output FITS file contains the phase corrections")
     parser.add_argument('--center', required=True, help="Coordinate center of the output FITS file (hh:mm:ss dd:mm:ss)")
     parser.add_argument('--radius', type=float, required=True, help="Radius of output FITS file (degrees)")
     parser.add_argument('--scale', type=float, default=0.25, help="Pixel size of output FITS file (degrees)")
@@ -145,16 +139,6 @@ def main():
     # Filter out failed solutions (and associated sources)
     sources, solutions = zip(*[(src, sol) for (src, sol) in zip(sources, solutions) if not sol.failed])
 
-    # Create lists of lm coordinates in the FITS projection for calibration directions
-    ras = np.array([src.ra for src in sources])
-    decs = np.array([src.dec for src in sources])
-    directions_lm = radec_to_lm(ras, decs, center.ra.rad, center.dec.rad)
-
-    # Solve phases for each antenna for each calibration direction
-    phases = np.empty((len(mset.antids), len(directions_lm.T)))
-    for i, solution in enumerate(solutions):
-        phases[:, i] = solution.phases(mset.U, mset.V)
-
     # from casacore.tables import table
     # gaintable = table('ddcal.gcal', readonly=False)
     # gains = gaintable.getcol('CPARAM')
@@ -165,78 +149,9 @@ def main():
     # gaintable.putcol('FLAG', flags)
     # exit()
 
-    # Provision TEC fits file and set up headers
-    width, height = int((2 * args.radius) // args.scale), int((2 * args.radius) // args.scale)
-    center_x, center_y = int(width // 2), int(height // 2)
-
-    logger.info("Creating TEC image of dimensions (%d, %d)", width, height)
-
-    data = np.zeros((1, 1, len(mset.antids), height, width), dtype=np.float)  # [time, frequency, antennas, dec, ra]
-    Atec = fits.PrimaryHDU(data)
-
-    Atec.header['CTYPE1'] = 'RA---SIN'
-    Atec.header['CRPIX1'] = center_x
-    Atec.header['CRVAL1'] = center.ra.deg
-    Atec.header['CDELT1'] = args.scale
-    Atec.header['CUNIT1'] = 'deg'
-
-    Atec.header['CTYPE2'] = 'DEC--SIN'
-    Atec.header['CRPIX2'] = center_y
-    Atec.header['CRVAl2'] = center.dec.deg
-    Atec.header['CDELT2'] = args.scale
-    Atec.header['CUNIT2'] = 'deg'
-
-    Atec.header['CTYPE3'] = 'ANTENNA'
-    Atec.header['CRPIX3'] = 1
-    Atec.header['CRVAL3'] = 0
-
-    Atec.header['CTYPE4'] = 'FREQ'
-    Atec.header['CRPIX4'] = 1
-    Atec.header['CRVAL4'] = mset.midfreq[0]
-    Atec.header['CDELT4'] = 1
-    Atec.header['CUNIT4'] = 'Hz'
-
-    Atec.header['CTYPE5'] = 'TIME'
-    Atec.header['CRPIX5'] = 1
-    Atec.header['CRVAL5'] = mset.midtime  # FIXME
-    Atec.header['CDELT5'] = 1
-
-    Atec.header['HISTORY'] = 'radical ' + ' '.join(sys.argv[1:])
-    print(' '.join(sys.argv))
-
-    wcs = WCS(Atec.header)
-
-    # Get oversampled l,m values for TEC file
-    xx, yy = np.meshgrid(range(0, args.oversample * width), range(0, args.oversample * height))
-    pixels = np.array([xx.flatten(), yy.flatten()]).T
-
-    ret = wcs.all_pix2world([[x / args.oversample - 1/args.oversample, y / args.oversample - 1/args.oversample, 0, 0, 0] for x, y in pixels], 0)
-    grid_lm = radec_to_lm(np.radians(ret.T[0]), np.radians(ret.T[1]), center.ra.rad, center.dec.rad)
-
-    for i in mset.antids:
-        # Compute interpolated phases
-        phases_grid = griddata(directions_lm.T, phases[i], grid_lm.T, method='nearest')
-        phases_grid = np.reshape(phases_grid, (args.oversample * height, args.oversample * width))  # [ dec, ra ]
-
-        # Gaussian smooth
-        phases_grid = gaussian_filter(phases_grid, args.oversample * args.smoothing_kernel, mode='constant', cval=0)
-
-        # Downsample
-        phases_grid = phases_grid[1::args.oversample, 1::args.oversample]
-
-        data[0, 0, i] = phases_grid / 8.44797245E9 * mset.midfreq
-
-    Atec.writeto(args.output, overwrite=True)
-
-
-def interpolate(xs, ys, zs, points, power=1):
-    dists = np.sqrt((points[:, 0, None] - xs[None, :])**2 + (points[:, 1, None] - ys[None, :])**2)  # [point, xyz]
-
-    weights = 1 / dists**power
-    weights = weights / weights.sum(axis=1)[:, None]  # Normalisation
-
-    vals = (weights * zs[None, :]).sum(axis=1)
-    return vals
+    # Save solution to tecscreen
+    tec = tecscreen.make(sources, solutions, mset, args.radius, args.scale, center, args.oversample, args.smoothing_kernel)
+    tec.writeto(args.out, overwrite=True)
 
 
 if __name__ == '__main__':
