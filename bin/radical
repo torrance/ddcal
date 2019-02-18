@@ -42,6 +42,12 @@ def main():
     parser.add_argument('--smoothing-kernel', default=1, type=float, help="The gaussian smoothing kernal width (sigma) in units of --scale")
     parser.add_argument('--flux-threshold', default=1, type=float, help="Sources with apparent flux values (Jy) under this threshold will not be fit with 2nd order terms")
     parser.add_argument('--metafits', required=True, help="Path to the metafits file")
+    parser.add_argument('--nsources', type=int, default=0, help="Limit calibration just to brightest (apparent) nsources")
+    parser.add_argument('--orders', type=int, nargs='+', default=[1, 2], help="The order of solution to solve for on each pass. \
+                                                                              This parameter allows to tweak the number _and_ type of each pass, \
+                                                                              eg. --orders 2 will complete only one pass, \
+                                                                              solving for a second order solution directly. \
+                                                                              Default: 1, 2")
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
@@ -81,8 +87,8 @@ def main():
         solutions.append(solution)
 
     # Begin directional calibration
-    for order in [1, 2]:
-        logger.info("Beginning pass %d", order)
+    for npass, order in enumerate(args.orders):
+        logger.info("Beginning pass %d", npass+1)
 
         for src, solution in zip(sources, solutions):
             # Don't try higher order fits if we've previously failed to fit
@@ -90,7 +96,7 @@ def main():
                 continue
 
             # For second and higher order fits, we need to unpeel previously peeled sources
-            if order > 1:
+            if npass > 0:
                 # Unpeel
                 start = tm.time()
                 phases = solution.phasecorrections(mset)
