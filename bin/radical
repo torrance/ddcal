@@ -3,12 +3,14 @@ from __future__ import print_function, division
 
 from argparse import ArgumentParser
 import logging
+import os.path
 import time as tm
 
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 import astropy.units as units
 from astropy.wcs import WCS
+from casacore.tables import table, maketabdesc, makearrcoldesc
 import numpy as np
 from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
@@ -38,10 +40,14 @@ def main():
     parser.add_argument('--smoothing-kernel', default=1, type=float, help="The gaussian smoothing kernal width (sigma) in units of --scale")
     parser.add_argument('--flux-threshold', default=1, type=float, help="Sources with apparent flux values (Jy) under this threshold will not be fit with 2nd order terms")
     parser.add_argument('--metafits', required=True, help="Path to the metafits file")
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
     logger = logging.getLogger(__name__)
-    logger.setLevel('DEBUG')
+    if args.debug:
+        logger.setLevel('DEBUG')
+    else:
+        logger.setLevel('INFO')
 
     mset = MeasurementSet(args.ms, refant=args.refant)
     center = SkyCoord(args.center, unit=(units.hourangle, units.degree))
@@ -101,6 +107,24 @@ def main():
                 l, m = radec_to_lm(comp.ra, comp.dec, mset.ra0, mset.dec0)
                 peel(mset.data, mset.u_lambda, mset.v_lambda, mset.w_lambda, l, m, Ax, Ay, phases)
             logger.debug("Peeled elapsed: %g", tm.time() - start)
+
+    # Create ms of peeling sources for debugging purposes
+    if args.debug:
+        if 'PEELED' not in mset.colnames():
+            col_dmi = mset.getdminfo('DATA')
+            col_dmi['NAME'] = 'PEELED'
+            shape = mset.getcell('DATA', 0).shape
+            mset.addcols(maketabdesc(makearrcoldesc('PEELED', 0.0+0.0j, valuetype='complex', shape=shape)), col_dmi)
+        mset.filtered.putcol('PEELED', mset.data)
+        mset.close()
+
+        # Print model to ds9 format
+        with open(os.path.splitext(args.out)[0] + '.reg', 'w') as f:
+            print("global color=red dashlist=8 3 width=1 font=\"helvetica 10 normal roman\" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1", file=f)
+            for src, sol in zip(sources, solutions):
+                if not sol.failed:
+                    for comp in src.components:
+                        print("point %fd %fd # point=circle text={%s}" % (comp.position.ra.deg, comp.position.dec.deg, src.name), file=f)
 
     # Create lists of lm coordinates in the FITS projection for calibration directions
     ras = np.array([src.ra for i, src in enumerate(sources) if not solutions[i].failed])
