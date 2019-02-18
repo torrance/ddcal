@@ -61,6 +61,10 @@ def main():
     sources = sorted(sources, reverse=True, key=lambda x: x.apparent(mset.midfreq))
     logger.info("Model sources ordered by apparent flux")
 
+    # Limit number of sources to calibrate to nsources
+    if args.nsources:
+        sources = sources[0:args.nsources]
+
     # Create empty solutions and populate Ax, Ay
     solutions = []
     for src in sources:
