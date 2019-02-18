@@ -33,21 +33,22 @@ class MeasurementSet(object):
 
         # Load data and associated row information
         # Filter out flagged rows, and autocorrelations
-        filtered = taql("select * from $mset where not FLAG_ROW and ANTENNA1 <> ANTENNA2")
-        flags = filtered.getcol('FLAG')
-        self.ant1 = filtered.getcol('ANTENNA1')
-        self.ant2 = filtered.getcol('ANTENNA2')
-        self.uvw = filtered.getcol('UVW')
-        self.data = np.complex128(filtered.getcol('DATA'))
-        self.data[flags] = np.nan
-
+        self.filtered = taql("select * from $mset where not FLAG_ROW and ANTENNA1 <> ANTENNA2")
+        self.ant1 = self.filtered.getcol('ANTENNA1')
+        self.ant2 = self.filtered.getcol('ANTENNA2')
+        self.uvw = self.filtered.getcol('UVW')
         self.u_lambda, self.v_lambda, self.w_lambda = self.uvw.T[:, :, None] / self.lambdas
+        self._data = None
 
-        # Calculate std deviation of data, where we assume (!) visibilities are overwhlemingly
-        # noise and normally distributed.
-        print("Calculating visbility statistics...")
-        self.sigma = np.sqrt(0.5 * (np.nanstd(self.data.real)**2 + np.nanstd(self.data.imag)**2)) / np.sqrt(len(self.freqs))
-        print("sigma when averaged across all channels: %g" % self.sigma)
+    @property
+    def data(self):
+        if self._data is None:
+            flags = self.filtered.getcol('FLAG')
+            self._data = np.complex128(self.filtered.getcol('DATA'))
+            self._data[flags] = np.nan
+
+        return self._data
+
 
     def __getattr__(self, name):
         return getattr(self.mset, name)
