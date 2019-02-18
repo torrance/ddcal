@@ -142,30 +142,28 @@ def main():
         for src, solution in zip(sources, solutions):
             writer.writerow([src.name, np.degrees(src.ra), np.degrees(src.dec), not solution.failed] + solution.get_params(2)[-5:] + solution.get_params(0))
 
+    # Filter out failed solutions (and associated sources)
+    sources, solutions = zip(*[(src, sol) for (src, sol) in zip(sources, solutions) if not sol.failed])
+
     # Create lists of lm coordinates in the FITS projection for calibration directions
-    ras = np.array([src.ra for i, src in enumerate(sources) if not solutions[i].failed])
-    decs = np.array([src.dec for i, src in enumerate(sources) if not solutions[i].failed])
+    ras = np.array([src.ra for src in sources])
+    decs = np.array([src.dec for src in sources])
     directions_lm = radec_to_lm(ras, decs, center.ra.rad, center.dec.rad)
 
     # Solve phases for each antenna for each calibration direction
     phases = np.empty((len(mset.antids), len(directions_lm.T)))
     for i, solution in enumerate(solutions):
-        if not solution.failed:
-            phases[:, i] = solution.phases(mset.U, mset.V)
+        phases[:, i] = solution.phases(mset.U, mset.V)
 
-    gaintable = table('ddcal.gcal', readonly=False)
-    gains = gaintable.getcol('CPARAM')
-    gains[:, :, :] = np.exp(-1j * phases[:, 0])[:, None, None]
-    gaintable.putcol('CPARAM', gains)
-    flags = gaintable.getcol('FLAG')
-    flags[:, :] = False
-    gaintable.putcol('FLAG', flags)
-    exit()
-
-    np.save('directions_lm.npy', directions_lm)
-    np.save('phases.npy', phases)
-    directions_lm = np.load('directions_lm.npy')
-    phases = np.load('phases.npy')
+    # from casacore.tables import table
+    # gaintable = table('ddcal.gcal', readonly=False)
+    # gains = gaintable.getcol('CPARAM')
+    # gains[:, :, :] = np.exp(-1j * phases[:, 0])[:, None, None]
+    # gaintable.putcol('CPARAM', gains)
+    # flags = gaintable.getcol('FLAG')
+    # flags[:, :] = False
+    # gaintable.putcol('FLAG', flags)
+    # exit()
 
     # Provision TEC fits file and set up headers
     width, height = int((2 * args.radius) // args.scale), int((2 * args.radius) // args.scale)
