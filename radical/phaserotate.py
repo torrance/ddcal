@@ -66,6 +66,7 @@ def rotateuvw(uvw, ra, dec, ra0, dec0):
 def woffset(data, oldw, neww, lambdas):
     offset = -2j * np.pi * (neww - oldw)
     phase = np.empty_like(data)
+
     for row in prange(0, phase.shape[0]):
         tmp = offset[row] / lambdas
         for pol in range(0, data.shape[2]):
