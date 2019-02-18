@@ -2,6 +2,7 @@
 from __future__ import print_function, division
 
 from argparse import ArgumentParser
+import csv
 import logging
 import os.path
 import sys
@@ -126,6 +127,13 @@ def main():
                 if not sol.failed:
                     for comp in src.components:
                         print("point %fd %fd # point=circle text={%s}" % (comp.position.ra.deg, comp.position.dec.deg, src.name), file=f)
+
+    # Print out solutions
+    with open(os.path.splitext(args.out)[0] + '.csv', 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['sourcename', 'ra', 'dec', 'status', 'x', 'y', 'xx', 'xy', 'yy', 'A1x', 'A1y', 'A2x', 'A2y'])
+        for src, solution in zip(sources, solutions):
+            writer.writerow([src.name, np.degrees(src.ra), np.degrees(src.dec), not solution.failed] + solution.get_params(2)[-5:] + solution.get_params(0))
 
     # Create lists of lm coordinates in the FITS projection for calibration directions
     ras = np.array([src.ra for i, src in enumerate(sources) if not solutions[i].failed])
