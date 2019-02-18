@@ -114,6 +114,7 @@ def main():
     # Create ms of peeling sources for debugging purposes
     if args.debug:
         if 'PEELED' not in mset.colnames():
+            logger.debug("Adding PEELED column to measurement sent")
             col_dmi = mset.getdminfo('DATA')
             col_dmi['NAME'] = 'PEELED'
             shape = mset.getcell('DATA', 0).shape
