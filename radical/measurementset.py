@@ -24,7 +24,8 @@ class MeasurementSet(object):
         self.midtime = times[len(times) // 2]
         midtime = self.midtime
         tmp = taql("select UVW, ANTENNA2 from $mset where TIME = $midtime and ANTENNA1 = $refant")
-        (_U, _V, _), antennas = tmp.getcol('UVW').T, tmp.getcol('ANTENNA2')
+        (_U, _V, _), antennas = -tmp.getcol('UVW').T, tmp.getcol('ANTENNA2')
+
 
         # Force U, V indices to align with antenna IDs
         self.U = np.zeros_like(self.antids, dtype=np.float64)
