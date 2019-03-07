@@ -119,7 +119,7 @@ def main():
             col_dmi = mset.getdminfo('DATA')
             col_dmi['NAME'] = 'PEELED'
             shape = mset.getcell('DATA', 0).shape
-            mset.addcols(maketabdesc(makearrcoldesc('PEELED', 0.0+0.0j, valuetype='complex', shape=shape)), col_dmi)
+            mset.filtered.addcols(maketabdesc(makearrcoldesc('PEELED', 0.0+0.0j, valuetype='complex', shape=shape)), col_dmi, addtoparent=True)
         mset.filtered.putcol('PEELED', mset.data)
         mset.close()
 
