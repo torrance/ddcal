@@ -56,10 +56,12 @@ def solve(src, solution, mset, order):
     logger.debug(res.message)
     logger.debug("Fit params:" + " %g" * len(res.x), *res.x)
 
-    # If fit converged, add solution or else mark it as failed
-    if res.success:
-        solution.set_params(res.x)
-    else:
+    # For some reason with scipy.optimize.least_squares, res.cost is only half of chisquared
+    solution.chisquared = 2 * res.cost
+    solution.set_params(res.x)
+
+    # If fit failed to converge, mark it as failed
+    if not res.success:
         logger.warning("Fit failed; marking solution as failed")
         solution.failed = True
 
@@ -72,8 +74,3 @@ def freq_average(data):
             averaged[row, pol] = np.nanmean(data[row, :, pol])
 
     return averaged
-
-
-def reduced_chi_squared(squaredsum, nsamples, nparams, sigma):
-    chi_squared = squaredsum / sigma**2
-    return chi_squared / (nsamples - nparams)
