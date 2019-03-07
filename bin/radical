@@ -25,6 +25,7 @@ import radical.tecscreen as tecscreen
 def main():
     parser = ArgumentParser("radical", description="radical: Radio Astronomy Directional Ionospheric CALibration")
     parser.add_argument('--ms', required=True, help="The measurement set to calibrate")
+    parser.add_argument('--datacolumn', default='CORRECTED_DATA')
     parser.add_argument('--model', required=True, help="The sky model (skymodel fileformat 1.1)")
     parser.add_argument('--out', default='tec.fits', help="The output FITS file contains the phase corrections")
     parser.add_argument('--center', required=True, help="Coordinate center of the output FITS file (hh:mm:ss dd:mm:ss)")
@@ -51,7 +52,7 @@ def main():
     else:
         logger.setLevel('INFO')
 
-    mset = MeasurementSet(args.ms, refant=args.refant)
+    mset = MeasurementSet(args.ms, refant=args.refant, datacolumn=args.datacolumn)
     center = SkyCoord(args.center, unit=(units.hourangle, units.degree))
 
     # Parse skymodel and load sources

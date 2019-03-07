@@ -5,8 +5,9 @@ import numpy as np
 
 import radical.constants as constants
 
+
 class MeasurementSet(object):
-    def __init__(self, filename, refant=0):
+    def __init__(self, filename, refant=0, datacolumn='CORRECTED_DATA'):
         self.mset = table(filename, readonly=False, ack=False)
         mset = self.mset
 
@@ -39,16 +40,20 @@ class MeasurementSet(object):
         self.uvw = self.filtered.getcol('UVW')
         self.u_lambda, self.v_lambda, self.w_lambda = self.uvw.T[:, :, None] / self.lambdas
         self._data = None
+        self.datacolumn = datacolumn
 
     @property
     def data(self):
         if self._data is None:
             flags = self.filtered.getcol('FLAG')
-            self._data = np.complex128(self.filtered.getcol('DATA'))
+            self._data = np.complex128(self.filtered.getcol(self.datacolumn))
             self._data[flags] = np.nan
 
         return self._data
 
+    @data.setter
+    def data(self, data):
+        self._data = data
 
     def __getattr__(self, name):
         return getattr(self.mset, name)
