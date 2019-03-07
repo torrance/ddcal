@@ -134,9 +134,34 @@ def main():
     # Print out solutions
     with open(os.path.splitext(args.out)[0] + '.csv', 'w') as f:
         writer = csv.writer(f)
-        writer.writerow(['sourcename', 'ra', 'dec', 'status', 'x', 'y', 'xx', 'xy', 'yy', 'A1x', 'A1y', 'A2x', 'A2y'])
+        writer.writerow([
+                'sourcename',
+                'ra',
+                'dec',
+                'state',
+                'chisq',
+                'Ax',
+                'Ay',
+                'x',
+                'y',
+                'xx',
+                'xy',
+                'yy',
+            ]
+            + list(mset.antids)
+        )
         for src, solution in zip(sources, solutions):
-            writer.writerow([src.name, np.degrees(src.ra), np.degrees(src.dec), not solution.failed] + solution.get_params(2)[-5:] + solution.get_params(0))
+            writer.writerow([
+                    src.name,
+                    np.degrees(src.ra),
+                    np.degrees(src.dec),
+                    not solution.failed,
+                    solution.chisquared,
+                ]
+                + list(np.array(solution.amplitudes).sum(axis=0))
+                + list(solution.get_params(2)[-5:])
+                + list(solution.phases(mset.U, mset.V))
+            )
 
     # Filter out failed solutions (and associated sources)
     sources, solutions = zip(*[(src, sol) for (src, sol) in zip(sources, solutions) if not sol.failed])
